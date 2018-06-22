@@ -11,9 +11,6 @@ includes:
   - include
   - include/${platform}
 
-libs:
-  - origin: https://github.com/mongoose-os-libs/mongoose
-
 tags:
   - c
   - core
