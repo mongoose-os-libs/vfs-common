@@ -14,6 +14,8 @@ extern "C" {
 
 void mgos_vfs_mmap_init(void);
 
+void mgos_vfs_print_fs_info(const char *path);
+
 #ifdef __cplusplus
 }
 #endif

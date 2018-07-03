@@ -134,11 +134,8 @@ bool mgos_vfs_mount(const char *path, const char *dev_type,
       LOG(LL_INFO, ("Mount %s @ %s (dev %p, opts %s) -> %p", fs_type, path, dev,
                     fs_opts, fs));
       if (fs->ops->mount(fs, fs_opts)) {
-        LOG(LL_INFO, ("%s: size %u, used: %u, free: %u", path,
-                      (unsigned int) fs->ops->get_space_total(fs),
-                      (unsigned int) fs->ops->get_space_used(fs),
-                      (unsigned int) fs->ops->get_space_free(fs)));
         mgos_vfs_hal_mount(path, fs);
+        mgos_vfs_print_fs_info(path);
         return true;
       } else {
         free(fs);
@@ -282,6 +279,16 @@ bool mgos_vfs_hal_mount(const char *path, struct mgos_vfs_fs *fs) {
   SLIST_INSERT_HEAD(&s_mounts, me, next);
   mgos_vfs_unlock();
   return true;
+}
+
+void mgos_vfs_print_fs_info(const char *path) {
+  struct mgos_vfs_mount_entry *me = find_mount_by_path(path, NULL);
+  if (me == NULL) return;
+  struct mgos_vfs_fs *fs = me->fs;
+  LOG(LL_INFO, ("%s: size %u, used: %u, free: %u", path,
+                (unsigned int) fs->ops->get_space_total(fs),
+                (unsigned int) fs->ops->get_space_used(fs),
+                (unsigned int) fs->ops->get_space_free(fs)));
 }
 
 int mgos_vfs_open(const char *path, int flags, int mode) {

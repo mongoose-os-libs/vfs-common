@@ -32,6 +32,8 @@
 #include "mgos_vfs.h"
 #include "mgos_vfs_dev.h"
 
+#include "stm32_flash.h"
+
 /* Note: FLASH_BASE_ADDR and FLASH_SIZE are defined externally. */
 #if FLASH_BASE_ADDR != FLASH_BASE
 #error "FLASH_BASE used by compiler and linker do not match"
@@ -94,22 +96,8 @@ static bool stm32_vfs_dev_flash_write(struct mgos_vfs_dev *dev, size_t offset,
   bool res = false;
   const struct dev_data *dd = (struct dev_data *) dev->dev_data;
   if (check_bounds(dd, offset, len)) {
-    res = true;
-    /* Note: could be optimized to use word and half-word writes. */
-    HAL_FLASH_Unlock();
-    for (size_t i = 0; i < len; i++) {
-      uint32_t addr = FLASH_BASE + dd->addr + offset;
-      uint8_t byte = *(((const uint8_t *) src) + i);
-      int st = HAL_FLASH_Program(FLASH_TYPEPROGRAM_BYTE, addr, byte);
-      if (st != HAL_OK) {
-        LOG(LL_ERROR, ("i = %u st = %d %lu 0x%lx", i, st, HAL_FLASH_GetError(),
-                       FLASH->SR));
-        res = false;
-        break;
-      }
-    }
+    res = stm32_flash_write_region(dd->addr + offset, len, src);
   }
-  HAL_FLASH_Lock();
   LOG((res ? LL_VERBOSE_DEBUG : LL_ERROR),
       ("%p: %s %u @ %d = %d", dev, "write", len, offset, res));
   return res;
@@ -117,12 +105,50 @@ static bool stm32_vfs_dev_flash_write(struct mgos_vfs_dev *dev, size_t offset,
 
 static bool stm32_vfs_dev_flash_erase(struct mgos_vfs_dev *dev, size_t offset,
                                       size_t len) {
-  /* STM32's flash erase granularity is too coarse, erase is not supported. */
-  LOG(LL_ERROR, ("flash erase is not supported"));
-  (void) dev;
-  (void) offset;
-  (void) len;
-  return false;
+  bool res = false;
+  uint8_t *tmp = NULL;
+  const struct dev_data *dd = (struct dev_data *) dev->dev_data;
+  if (check_bounds(dd, offset, len)) {
+    int abs_offset = dd->addr + offset;
+    int sector = stm32_flash_get_sector(abs_offset);
+    if (sector < 0) goto out;
+    int sector_offset = stm32_flash_get_sector_offset(sector);
+    int sector_size = stm32_flash_get_sector_size(sector);
+    if (abs_offset == sector_offset && len == sector_size) {
+      res = (stm32_flash_sector_is_erased(sector) ||
+             stm32_flash_erase_sector(sector));
+    } else if (abs_offset >= sector_offset &&
+               abs_offset + len <= sector_offset + sector_size) {
+      if ((res = stm32_flash_region_is_erased(abs_offset, len))) goto out;
+      LOG(LL_WARN, ("Unsafe flash erase: %u @ 0x%x", len, abs_offset));
+      tmp = malloc(sector_size);
+      if (tmp == NULL) goto out;
+      int before_len = abs_offset - sector_offset;
+      int after_offset = before_len + len;
+      int after_len = sector_size - after_offset;
+      memcpy(tmp, (const uint8_t *) (FLASH_BASE + sector_offset), sector_size);
+      res = stm32_flash_erase_sector(sector);
+      if (res) {
+        if (before_len > 0) {
+          res = stm32_flash_write_region(sector_offset, before_len, tmp);
+        }
+      }
+      if (res) {
+        if (after_len > 0) {
+          res = stm32_flash_write_region(sector_offset + after_offset,
+                                         after_len, tmp + after_offset);
+        }
+      }
+      free(tmp);
+    } else {
+      /* Cross-sector operations are not supported. */
+      goto out;
+    }
+  }
+out:
+  LOG((res ? LL_VERBOSE_DEBUG : LL_ERROR),
+      ("%p: %s %u @ %d = %d", dev, "erase", len, offset, res));
+  return res;
 }
 
 static size_t stm32_vfs_dev_flash_get_size(struct mgos_vfs_dev *dev) {
