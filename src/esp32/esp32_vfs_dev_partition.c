@@ -32,66 +32,89 @@
 #include "mgos_vfs.h"
 #include "mgos_vfs_dev.h"
 
-static bool esp32_vfs_dev_partition_open(struct mgos_vfs_dev *dev,
-                                         const char *opts) {
+static enum mgos_vfs_dev_err esp32_vfs_dev_partition_open(
+    struct mgos_vfs_dev *dev, const char *opts) {
+  enum mgos_vfs_dev_err res = MGOS_VFS_DEV_ERR_INVAL;
   char *label = NULL;
   int subtype = 0xff; /* any subtype */
   json_scanf(opts, strlen(opts), "{name: %Q, label: %Q, subtype: %d}", &label,
              &label, &subtype);
   if (label == NULL) {
     LOG(LL_ERROR, ("Must specify partition label"));
-    return false;
+    goto out;
   }
   const esp_partition_t *part =
       esp_partition_find_first(ESP_PARTITION_TYPE_DATA, subtype, label);
-  if (part != NULL) {
-    dev->dev_data = (void *) part;
+  if (part == NULL) {
+    res = MGOS_VFS_DEV_ERR_NXIO;
+    goto out;
   }
+  dev->dev_data = (void *) part;
+  res = MGOS_VFS_DEV_ERR_NONE;
+out:
   free(label);
-  return (part != NULL);
+  return res;
 }
 
-static bool esp32_vfs_dev_partition_read(struct mgos_vfs_dev *dev,
-                                         size_t offset, size_t len, void *dst) {
+static enum mgos_vfs_dev_err esp32_vfs_dev_partition_read(
+    struct mgos_vfs_dev *dev, size_t offset, size_t len, void *dst) {
+  esp_err_t eres = ESP_OK;
+  enum mgos_vfs_dev_err res = MGOS_VFS_DEV_ERR_INVAL;
   const esp_partition_t *p = (esp_partition_t *) dev->dev_data;
   if (len > p->size || offset + len > p->address + p->size) {
     LOG(LL_ERROR, ("%s: invalid read args: %u @ %u", p->label, len, offset));
-    return false;
+    goto out;
   }
-  esp_err_t r = spi_flash_read(p->address + offset, dst, len);
-  LOG((r == ESP_OK ? LL_VERBOSE_DEBUG : LL_ERROR),
-      ("%s: %s %u @ %d = %d", p->label, "read", len, offset, r));
-  return (r == ESP_OK);
+  if ((eres = spi_flash_read(p->address + offset, dst, len)) != ESP_OK) {
+    res = MGOS_VFS_DEV_ERR_IO;
+    goto out;
+  }
+  res = MGOS_VFS_DEV_ERR_NONE;
+out:
+  LOG((res == 0 ? LL_VERBOSE_DEBUG : LL_ERROR),
+      ("%s: %s %u @ %d = %d %d", p->label, "read", len, offset, eres, res));
+  return res;
 }
 
-static bool esp32_vfs_dev_partition_write(struct mgos_vfs_dev *dev,
-                                          size_t offset, size_t len,
-                                          const void *src) {
+static enum mgos_vfs_dev_err esp32_vfs_dev_partition_write(
+    struct mgos_vfs_dev *dev, size_t offset, size_t len, const void *src) {
+  esp_err_t eres = ESP_OK;
+  enum mgos_vfs_dev_err res = MGOS_VFS_DEV_ERR_INVAL;
   const esp_partition_t *p = (esp_partition_t *) dev->dev_data;
   if (len > p->size || len + len > p->address + p->size) {
     LOG(LL_ERROR, ("%s: invalid write args: %u @ %u", p->label, len, offset));
-    return false;
+    goto out;
   }
-  mgos_wdt_feed();
-  esp_err_t r = spi_flash_write(p->address + offset, src, len);
-  LOG((r == ESP_OK ? LL_VERBOSE_DEBUG : LL_ERROR),
-      ("%s: %s %u @ %d = %d", p->label, "write", len, offset, r));
-  return (r == ESP_OK);
+  if ((eres = spi_flash_write(p->address + offset, src, len)) != ESP_OK) {
+    res = MGOS_VFS_DEV_ERR_IO;
+    goto out;
+  }
+  res = MGOS_VFS_DEV_ERR_NONE;
+out:
+  LOG((res == 0 ? LL_VERBOSE_DEBUG : LL_ERROR),
+      ("%s: %s %u @ %d = %d %d", p->label, "write", len, offset, eres, res));
+  return res;
 }
 
-static bool esp32_vfs_dev_partition_erase(struct mgos_vfs_dev *dev,
-                                          size_t offset, size_t len) {
+static enum mgos_vfs_dev_err esp32_vfs_dev_partition_erase(
+    struct mgos_vfs_dev *dev, size_t offset, size_t len) {
+  esp_err_t eres = ESP_OK;
+  enum mgos_vfs_dev_err res = MGOS_VFS_DEV_ERR_INVAL;
   const esp_partition_t *p = (esp_partition_t *) dev->dev_data;
   if (len > p->size || offset + len > p->address + p->size ||
       offset % SPI_FLASH_SEC_SIZE != 0 || len % SPI_FLASH_SEC_SIZE != 0) {
     LOG(LL_ERROR, ("Invalid erase args: %u @ %u", len, offset));
-    return false;
+    goto out;
   }
-  mgos_wdt_feed();
-  esp_err_t r = spi_flash_erase_range(p->address + offset, len);
-  LOG((r == ESP_OK ? LL_VERBOSE_DEBUG : LL_ERROR),
-      ("%s: %s %u @ %d = %d", p->label, "erase", len, offset, r));
-  return (r == ESP_OK);
+  if ((eres = spi_flash_erase_range(p->address + offset, len)) != ESP_OK) {
+    res = MGOS_VFS_DEV_ERR_IO;
+    goto out;
+  }
+  res = MGOS_VFS_DEV_ERR_NONE;
+out:
+  LOG((res == 0 ? LL_VERBOSE_DEBUG : LL_ERROR),
+      ("%s: %s %u @ %d = %d %d", p->label, "erase", len, offset, eres, res));
+  return res;
 }
 
 static size_t esp32_vfs_dev_partition_get_size(struct mgos_vfs_dev *dev) {
@@ -99,10 +122,10 @@ static size_t esp32_vfs_dev_partition_get_size(struct mgos_vfs_dev *dev) {
   return p->size;
 }
 
-static bool esp32_vfs_dev_partition_close(struct mgos_vfs_dev *dev) {
-  /* Nothing to do. */
+static enum mgos_vfs_dev_err esp32_vfs_dev_partition_close(
+    struct mgos_vfs_dev *dev) {
   (void) dev;
-  return true;
+  return MGOS_VFS_DEV_ERR_NONE;
 }
 
 static const struct mgos_vfs_dev_ops esp32_vfs_dev_partition_ops = {

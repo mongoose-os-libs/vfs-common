@@ -308,10 +308,10 @@ out:
   return r;
 }
 
-static bool cc3200_vfs_dev_slfs_container_open(struct mgos_vfs_dev *dev,
-                                               const char *opts) {
+static enum mgos_vfs_dev_err cc3200_vfs_dev_slfs_container_open(
+    struct mgos_vfs_dev *dev, const char *opts) {
   int cidx = -1;
-  bool ret = false;
+  enum mgos_vfs_dev_err res = MGOS_VFS_DEV_ERR_INVAL;
   char *cpfx = NULL;
   unsigned int size = 0;
   bool create = false;
@@ -323,7 +323,10 @@ static bool cc3200_vfs_dev_slfs_container_open(struct mgos_vfs_dev *dev,
              &size, &create, &flush_interval_ms);
   if (cpfx == NULL) goto out;
   dd = (struct dev_data *) calloc(1, sizeof(*dd));
-  if (dd == NULL) goto out;
+  if (dd == NULL) {
+    res = MGOS_VFS_DEV_ERR_NOMEM;
+    goto out;
+  }
   dd->fh = -1;
   dd->flush_timer_id = MGOS_INVALID_TIMER_ID;
   dd->flush_interval_ms = flush_interval_ms;
@@ -349,23 +352,26 @@ static bool cc3200_vfs_dev_slfs_container_open(struct mgos_vfs_dev *dev,
       }
     }
   }
-  if (dd->fh < 0) goto out;
+  if (dd->fh < 0) {
+    res = MGOS_VFS_DEV_ERR_IO;
+    goto out;
+  }
   dd->cpfx = strdup(cpfx);
   dev->dev_data = dd;
   SLIST_INSERT_HEAD(&s_devs, dd, next);
-  ret = true;
+
+  res = MGOS_VFS_DEV_ERR_NONE;
 
 out:
   LOG(LL_INFO, ("%p %s.%d %lu 0x%llx", dev, cpfx, (dd ? dd->cidx : -1),
                 (dd ? dd->size : 0), (dd ? dd->seq : 0)));
-  if (!ret) free(dd);
+  if (res != 0) free(dd);
   free(cpfx);
-  return ret;
+  return res;
 }
 
-static bool cc3200_vfs_dev_slfs_container_read(struct mgos_vfs_dev *dev,
-                                               size_t offset, size_t size,
-                                               void *dst) {
+static enum mgos_vfs_dev_err cc3200_vfs_dev_slfs_container_read(
+    struct mgos_vfs_dev *dev, size_t offset, size_t size, void *dst) {
   _i32 r = -1;
   struct dev_data *dd = (struct dev_data *) dev->dev_data;
   LOG(LL_VERBOSE_DEBUG,
@@ -388,12 +394,11 @@ static bool cc3200_vfs_dev_slfs_container_read(struct mgos_vfs_dev *dev,
           ("%p read %d @ %d -> %d", dev, (int) size, (int) offset, (int) r));
     }
   } while (dd->fh < 0);
-  return (r == size);
+  return (r == size ? MGOS_VFS_DEV_ERR_NONE : MGOS_VFS_DEV_ERR_IO);
 }
 
-static bool cc3200_vfs_dev_slfs_container_write(struct mgos_vfs_dev *dev,
-                                                size_t offset, size_t size,
-                                                const void *src) {
+static enum mgos_vfs_dev_err cc3200_vfs_dev_slfs_container_write(
+    struct mgos_vfs_dev *dev, size_t offset, size_t size, const void *src) {
   _i32 r = -1;
   struct dev_data *dd = (struct dev_data *) dev->dev_data;
   LOG(LL_VERBOSE_DEBUG,
@@ -415,14 +420,15 @@ static bool cc3200_vfs_dev_slfs_container_write(struct mgos_vfs_dev *dev,
           ("%p write %d @ %d -> %d", dev, (int) size, (int) offset, (int) r));
     }
   } while (dd->fh < 0);
-  return (r == size);
+  return (r == size ? MGOS_VFS_DEV_ERR_NONE : MGOS_VFS_DEV_ERR_IO);
 }
 
-static bool cc3200_vfs_dev_slfs_container_erase(struct mgos_vfs_dev *dev,
-                                                size_t offset, size_t len) {
+static enum mgos_vfs_dev_err cc3200_vfs_dev_slfs_container_erase(
+    struct mgos_vfs_dev *dev, size_t offset, size_t len) {
   struct dev_data *dd = (struct dev_data *) dev->dev_data;
   LOG(LL_VERBOSE_DEBUG, ("%p erase %d @ %d", dev, (int) len, (int) offset));
-  return (fs_switch_container(dd, offset, len) == 0);
+  int r = fs_switch_container(dd, offset, len);
+  return (r == 0 ? MGOS_VFS_DEV_ERR_NONE : MGOS_VFS_DEV_ERR_IO);
 }
 
 static size_t cc3200_vfs_dev_slfs_container_get_size(struct mgos_vfs_dev *dev) {
@@ -430,14 +436,14 @@ static size_t cc3200_vfs_dev_slfs_container_get_size(struct mgos_vfs_dev *dev) {
   return dd->size;
 }
 
-static bool cc3200_vfs_dev_slfs_container_close(struct mgos_vfs_dev *dev) {
+static enum mgos_vfs_dev_err cc3200_vfs_dev_slfs_container_close(
+    struct mgos_vfs_dev *dev) {
   struct dev_data *dd = (struct dev_data *) dev->dev_data;
   SLIST_REMOVE(&s_devs, dd, dev_data, next);
-  LOG(LL_DEBUG, ("%p fh %ld rw %d", dev, dd->fh, dd->rw));
   fs_close_container(dd);
   free(dd->cpfx);
   free(dd);
-  return true;
+  return MGOS_VFS_DEV_ERR_NONE;
 }
 
 static const struct mgos_vfs_dev_ops cc3200_vfs_dev_slfs_container_ops = {

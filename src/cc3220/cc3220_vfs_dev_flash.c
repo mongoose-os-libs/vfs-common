@@ -45,19 +45,22 @@ struct dev_data {
   int size;
 };
 
-static bool cc3220_vfs_dev_flash_write(struct mgos_vfs_dev *dev, size_t offset,
-                                       size_t size, const void *src);
-static bool cc3220_vfs_dev_flash_erase(struct mgos_vfs_dev *dev, size_t offset,
-                                       size_t size);
+static enum mgos_vfs_dev_err cc3220_vfs_dev_flash_write(
+    struct mgos_vfs_dev *dev, size_t offset, size_t size, const void *src);
+static enum mgos_vfs_dev_err cc3220_vfs_dev_flash_erase(
+    struct mgos_vfs_dev *dev, size_t offset, size_t size);
 
-static bool cc3220_vfs_dev_flash_open(struct mgos_vfs_dev *dev,
-                                      const char *opts) {
+static enum mgos_vfs_dev_err cc3220_vfs_dev_flash_open(struct mgos_vfs_dev *dev,
+                                                       const char *opts) {
+  enum mgos_vfs_dev_err res = MGOS_VFS_DEV_ERR_IO, res2;
   int fh = 1;
-  bool ret = false;
   unsigned char *image = NULL;
   unsigned char *buf = NULL;
   struct dev_data *dd = (struct dev_data *) calloc(1, sizeof(*dd));
-  if (dd == NULL) goto out;
+  if (dd == NULL) {
+    res = MGOS_VFS_DEV_ERR_NOMEM;
+    goto out;
+  }
   dd->offset = MGOS_DEV_CC3220_FLASH_DEFAULT_OFFSET;
   dd->size = -1;
   json_scanf(opts, strlen(opts), "{offset: %d, size: %d, image: %Q}",
@@ -69,6 +72,7 @@ static bool cc3220_vfs_dev_flash_open(struct mgos_vfs_dev *dev,
         ("Invalid offset: 0x%x, must be between 0 and 0x%x and aligned to 0x%x",
          dd->offset, CC3220_FLASH_SIZE - CC3220_FLASH_SECTOR_SIZE,
          CC3220_FLASH_SECTOR_SIZE));
+    res = MGOS_VFS_DEV_ERR_INVAL;
     goto out;
   }
   if (dd->offset + dd->size > CC3220_FLASH_SIZE ||
@@ -77,6 +81,7 @@ static bool cc3220_vfs_dev_flash_open(struct mgos_vfs_dev *dev,
                    "not exceed %d",
                    dd->size, dd->offset, CC3220_FLASH_SECTOR_SIZE,
                    CC3220_FLASH_SIZE - dd->offset));
+    res = MGOS_VFS_DEV_ERR_INVAL;
     goto out;
   }
   dev->dev_data = dd;
@@ -116,11 +121,14 @@ static bool cc3220_vfs_dev_flash_open(struct mgos_vfs_dev *dev,
         dup += nr;
         continue;
       }
-      if (!cc3220_vfs_dev_flash_erase(dev, offset, CC3220_FLASH_SECTOR_SIZE)) {
+      if ((res2 = cc3220_vfs_dev_flash_erase(dev, offset,
+                                             CC3220_FLASH_SECTOR_SIZE)) != 0) {
+        res = res2;
         goto out;
       }
-      if (!cc3220_vfs_dev_flash_write(dev, offset, CC3220_FLASH_SECTOR_SIZE,
-                                      buf)) {
+      if ((res2 = cc3220_vfs_dev_flash_write(
+               dev, offset, CC3220_FLASH_SECTOR_SIZE, buf)) != 0) {
+        res = res2;
         goto out;
       }
       mgos_wdt_feed();
@@ -141,28 +149,31 @@ static bool cc3220_vfs_dev_flash_open(struct mgos_vfs_dev *dev,
   }
 
 out_ok:
-  ret = true;
+  res = MGOS_VFS_DEV_ERR_NONE;
 
 out:
-  if (!ret) free(dd);
+  if (res != 0) free(dd);
   free(image);
   free(buf);
   if (fh >= 0) sl_FsClose(fh, NULL, NULL, 0);
-  return ret;
+  return res;
 }
 
-static bool cc3220_vfs_dev_flash_read(struct mgos_vfs_dev *dev, size_t offset,
-                                      size_t size, void *dst) {
-  bool ret = false;
+static enum mgos_vfs_dev_err cc3220_vfs_dev_flash_read(struct mgos_vfs_dev *dev,
+                                                       size_t offset,
+                                                       size_t size, void *dst) {
+  enum mgos_vfs_dev_err res = MGOS_VFS_DEV_ERR_INVAL;
   struct dev_data *dd = (struct dev_data *) dev->dev_data;
-  if (offset > dd->size || offset + size > dd->size) goto out;
+  if (offset > dd->size || offset + size > dd->size) {
+    goto out;
+  }
   memcpy(dst, (const uint8_t *) (CC3220_FLASH_MMAP_BASE + dd->offset + offset),
          size);
-  ret = true;
+  res = MGOS_VFS_DEV_ERR_NONE;
 out:
-  LOG((ret ? LL_VERBOSE_DEBUG : LL_ERROR),
-      ("%p read %d @ %d => %d", dev, (int) size, (int) offset, ret));
-  return ret;
+  LOG((res == 0 ? LL_VERBOSE_DEBUG : LL_ERROR),
+      ("%p read %d @ %d => %d", dev, (int) size, (int) offset, res));
+  return res;
 }
 
 static bool flash_program(struct dev_data *dd, size_t offset, size_t size,
@@ -178,14 +189,17 @@ static bool flash_program(struct dev_data *dd, size_t offset, size_t size,
   return true;
 }
 
-static bool cc3220_vfs_dev_flash_write(struct mgos_vfs_dev *dev, size_t offset,
-                                       size_t size, const void *src) {
-  bool ret = false;
+static enum mgos_vfs_dev_err cc3220_vfs_dev_flash_write(
+    struct mgos_vfs_dev *dev, size_t offset, size_t size, const void *src) {
+  enum mgos_vfs_dev_err res = MGOS_VFS_DEV_ERR_IO, res2;
   struct dev_data *dd = (struct dev_data *) dev->dev_data;
   const uint8_t *sp = (const uint8_t *) src;
   size_t orig_offset = offset, orig_size = size;
   size_t aligned_size = 0;
-  if (offset > dd->size || offset + size > dd->size) goto out;
+  if (offset > dd->size || offset + size > dd->size) {
+    res = MGOS_VFS_DEV_ERR_INVAL;
+    goto out;
+  }
 
   /* Align write offset, if necessary. */
   if (offset % CC3220_FLASH_WRITE_ALIGN != 0) {
@@ -194,8 +208,9 @@ static bool cc3220_vfs_dev_flash_write(struct mgos_vfs_dev *dev, size_t offset,
     size_t rem_size = CC3220_FLASH_WRITE_ALIGN - rem;
     size_t aligned_offset = offset - rem;
     if (rem_size > size) rem_size = size;
-    if (!cc3220_vfs_dev_flash_read(dev, aligned_offset,
-                                   CC3220_FLASH_WRITE_ALIGN, align_buf)) {
+    if ((res2 = cc3220_vfs_dev_flash_read(
+             dev, aligned_offset, CC3220_FLASH_WRITE_ALIGN, align_buf)) != 0) {
+      res = res2;
       goto out;
     }
     LOG(LL_VERBOSE_DEBUG, ("%p rem %d rem_size %d", dev, rem, rem_size));
@@ -223,8 +238,9 @@ static bool cc3220_vfs_dev_flash_write(struct mgos_vfs_dev *dev, size_t offset,
     uint8_t align_buf[CC3220_FLASH_WRITE_ALIGN];
     assert(size < CC3220_FLASH_WRITE_ALIGN);
     assert(offset % CC3220_FLASH_WRITE_ALIGN == 0);
-    if (!cc3220_vfs_dev_flash_read(dev, offset, CC3220_FLASH_WRITE_ALIGN,
-                                   align_buf)) {
+    if ((res2 = cc3220_vfs_dev_flash_read(dev, offset, CC3220_FLASH_WRITE_ALIGN,
+                                          align_buf)) != 0) {
+      res = res2;
       goto out;
     }
     memcpy(align_buf, sp, size);
@@ -232,21 +248,22 @@ static bool cc3220_vfs_dev_flash_write(struct mgos_vfs_dev *dev, size_t offset,
       goto out;
     }
   }
-  ret = true;
+  res = MGOS_VFS_DEV_ERR_NONE;
 out:
-  LOG((ret ? LL_VERBOSE_DEBUG : LL_ERROR),
-      ("%p write %d @ %d => %d", dev, (int) orig_size, (int) orig_offset, ret));
-  return ret;
+  LOG((res == 0 ? LL_VERBOSE_DEBUG : LL_ERROR),
+      ("%p write %d @ %d => %d", dev, (int) orig_size, (int) orig_offset, res));
+  return res;
 }
 
-static bool cc3220_vfs_dev_flash_erase(struct mgos_vfs_dev *dev, size_t offset,
-                                       size_t size) {
-  bool ret = false;
+static enum mgos_vfs_dev_err cc3220_vfs_dev_flash_erase(
+    struct mgos_vfs_dev *dev, size_t offset, size_t size) {
+  enum mgos_vfs_dev_err res = MGOS_VFS_DEV_ERR_IO;
   struct dev_data *dd = (struct dev_data *) dev->dev_data;
   size_t orig_offset = offset, orig_size = size;
   if (offset > dd->size || offset + size > dd->size ||
       (offset % CC3220_FLASH_SECTOR_SIZE != 0) ||
       (size % CC3220_FLASH_SECTOR_SIZE != 0)) {
+    res = MGOS_VFS_DEV_ERR_INVAL;
     goto out;
   }
   while (size > 0) {
@@ -256,11 +273,11 @@ static bool cc3220_vfs_dev_flash_erase(struct mgos_vfs_dev *dev, size_t offset,
     offset += CC3220_FLASH_SECTOR_SIZE;
     size -= CC3220_FLASH_SECTOR_SIZE;
   }
-  ret = true;
+  res = MGOS_VFS_DEV_ERR_NONE;
 out:
-  LOG((ret ? LL_VERBOSE_DEBUG : LL_ERROR),
-      ("%p erase %d @ %d => %d", dev, (int) orig_size, (int) orig_offset, ret));
-  return ret;
+  LOG((res == 0 ? LL_VERBOSE_DEBUG : LL_ERROR),
+      ("%p erase %d @ %d => %d", dev, (int) orig_size, (int) orig_offset, res));
+  return res;
 }
 
 static size_t cc3220_vfs_dev_flash_get_size(struct mgos_vfs_dev *dev) {
@@ -268,10 +285,11 @@ static size_t cc3220_vfs_dev_flash_get_size(struct mgos_vfs_dev *dev) {
   return dd->size;
 }
 
-static bool cc3220_vfs_dev_flash_close(struct mgos_vfs_dev *dev) {
+static enum mgos_vfs_dev_err cc3220_vfs_dev_flash_close(
+    struct mgos_vfs_dev *dev) {
   struct dev_data *dd = (struct dev_data *) dev->dev_data;
   free(dd);
-  return true;
+  return MGOS_VFS_DEV_ERR_NONE;
 }
 
 static const struct mgos_vfs_dev_ops cc3220_vfs_dev_flash_ops = {

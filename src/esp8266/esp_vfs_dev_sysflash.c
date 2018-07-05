@@ -30,16 +30,16 @@
 
 #define FLASH_UNIT_SIZE 4
 
-static bool esp_vfs_dev_sysflash_open(struct mgos_vfs_dev *dev,
-                                      const char *opts) {
+static enum mgos_vfs_dev_err esp_vfs_dev_sysflash_open(struct mgos_vfs_dev *dev,
+                                                       const char *opts) {
   (void) dev;
   (void) opts;
-  return true;
+  return MGOS_VFS_DEV_ERR_NONE;
 }
 
-static bool esp_spi_flash_readwrite(size_t addr, size_t size, void *data,
-                                    bool write) {
-  bool ret = false;
+static enum mgos_vfs_dev_err esp_spi_flash_readwrite(size_t addr, size_t size,
+                                                     void *data, bool write) {
+  enum mgos_vfs_dev_err res = MGOS_VFS_DEV_ERR_INVAL;
   /*
    * With proper configurarion spiffs never reads or writes more than
    * MGOS_SPIFFS_DEFAULT_PAGE_SIZE
@@ -49,57 +49,57 @@ static bool esp_spi_flash_readwrite(size_t addr, size_t size, void *data,
     goto out;
   }
 
+  res = MGOS_VFS_DEV_ERR_IO;
   u32_t tmp_buf[(MGOS_SPIFFS_DEFAULT_PAGE_SIZE + FLASH_UNIT_SIZE * 2) /
                 sizeof(u32_t)];
   u32_t aligned_addr = addr & (-FLASH_UNIT_SIZE);
   u32_t aligned_size =
       ((size + (FLASH_UNIT_SIZE - 1)) & -FLASH_UNIT_SIZE) + FLASH_UNIT_SIZE;
 
-  int res = spi_flash_read(aligned_addr, tmp_buf, aligned_size);
-  if (res != 0) {
-    LOG(LL_ERROR, ("spi_flash_read failed: %d (%d, %d)", res,
+  int sres = spi_flash_read(aligned_addr, tmp_buf, aligned_size);
+  if (sres != 0) {
+    LOG(LL_ERROR, ("spi_flash_read failed: %d (%d, %d)", sres,
                    (int) aligned_addr, (int) aligned_size));
     goto out;
   }
 
   if (!write) {
     memcpy(data, ((u8_t *) tmp_buf) + (addr - aligned_addr), size);
-    ret = true;
-    goto out;
+    goto out_ok;
   }
 
   memcpy(((u8_t *) tmp_buf) + (addr - aligned_addr), data, size);
 
-  res = spi_flash_write(aligned_addr, tmp_buf, aligned_size);
-  if (res != 0) {
-    LOG(LL_ERROR, ("spi_flash_write failed: %d (%d, %d)", res,
+  sres = spi_flash_write(aligned_addr, tmp_buf, aligned_size);
+  if (sres != 0) {
+    LOG(LL_ERROR, ("spi_flash_write failed: %d (%d, %d)", sres,
                    (int) aligned_addr, (int) aligned_size));
     goto out;
   }
-
-  ret = true;
-
+out_ok:
+  res = MGOS_VFS_DEV_ERR_NONE;
 out:
-  LOG(LL_VERBOSE_DEBUG,
-      ("%s %u @ 0x%x => %d", (write ? "write" : "read"), size, addr, ret));
-  return ret;
+  LOG((res == 0 ? LL_VERBOSE_DEBUG : LL_ERROR),
+      ("%s %u @ 0x%x => %d", (write ? "write" : "read"), size, addr, res));
+  return res;
 }
 
-static bool esp_vfs_dev_sysflash_read(struct mgos_vfs_dev *dev, size_t offset,
-                                      size_t size, void *dst) {
+static enum mgos_vfs_dev_err esp_vfs_dev_sysflash_read(struct mgos_vfs_dev *dev,
+                                                       size_t offset,
+                                                       size_t size, void *dst) {
   (void) dev;
   return esp_spi_flash_readwrite(offset, size, dst, false /* write */);
 }
 
-static bool esp_vfs_dev_sysflash_write(struct mgos_vfs_dev *dev, size_t offset,
-                                       size_t size, const void *src) {
+static enum mgos_vfs_dev_err esp_vfs_dev_sysflash_write(
+    struct mgos_vfs_dev *dev, size_t offset, size_t size, const void *src) {
   (void) dev;
   return esp_spi_flash_readwrite(offset, size, (void *) src, true /* write */);
 }
 
-static bool esp_vfs_dev_sysflash_erase(struct mgos_vfs_dev *dev, size_t offset,
-                                       size_t len) {
-  bool ret = false;
+static enum mgos_vfs_dev_err esp_vfs_dev_sysflash_erase(
+    struct mgos_vfs_dev *dev, size_t offset, size_t len) {
+  enum mgos_vfs_dev_err res = MGOS_VFS_DEV_ERR_INVAL;
   if (offset % FLASH_SECTOR_SIZE != 0 || len % FLASH_SECTOR_SIZE != 0) {
     LOG(LL_ERROR, ("Invalid size provided to esp_spiffs_erase (%d, %d)",
                    (int) offset, (int) len));
@@ -107,13 +107,18 @@ static bool esp_vfs_dev_sysflash_erase(struct mgos_vfs_dev *dev, size_t offset,
   }
   u32_t sector = (offset / FLASH_SECTOR_SIZE);
   while (sector * FLASH_SECTOR_SIZE < offset + len) {
-    ret = (spi_flash_erase_sector(sector) == SPI_FLASH_RESULT_OK);
+    if (spi_flash_erase_sector(sector) != SPI_FLASH_RESULT_OK) {
+      res = MGOS_VFS_DEV_ERR_IO;
+      goto out;
+    }
     sector++;
   }
+  res = MGOS_VFS_DEV_ERR_NONE;
 out:
-  LOG(LL_DEBUG, ("erase %u @ %u => %d", len, offset, ret));
+  LOG((res == 0 ? LL_VERBOSE_DEBUG : LL_ERROR),
+      ("erase %u @ %u => %d", len, offset, res));
   (void) dev;
-  return ret;
+  return res;
 }
 
 extern SpiFlashChip *flashchip;
@@ -123,10 +128,10 @@ size_t esp_vfs_dev_sysflash_get_size(struct mgos_vfs_dev *dev) {
   return flashchip->chip_size;
 }
 
-static bool esp_vfs_dev_sysflash_close(struct mgos_vfs_dev *dev) {
-  /* Nothing to do. */
+static enum mgos_vfs_dev_err esp_vfs_dev_sysflash_close(
+    struct mgos_vfs_dev *dev) {
   (void) dev;
-  return true;
+  return MGOS_VFS_DEV_ERR_NONE;
 }
 
 static const struct mgos_vfs_dev_ops esp_vfs_dev_sysflash_ops = {

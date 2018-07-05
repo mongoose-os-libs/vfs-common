@@ -57,8 +57,9 @@ struct mgos_vfs_dev *mgos_vfs_dev_open(const char *type, const char *opts) {
       dev = (struct mgos_vfs_dev *) calloc(1, sizeof(*dev));
       LOG(LL_INFO, ("%s (%s) -> %p", type, opts, dev));
       dev->ops = de->ops;
-      if (!de->ops->open(dev, opts)) {
-        LOG(LL_ERROR, ("Dev %s %s open failed", type, opts));
+      enum mgos_vfs_dev_err dres = de->ops->open(dev, opts);
+      if (dres != 0) {
+        LOG(LL_ERROR, ("Dev %s %s open failed: %d", type, opts, dres));
         free(dev);
         dev = NULL;
       }
@@ -71,10 +72,12 @@ struct mgos_vfs_dev *mgos_vfs_dev_open(const char *type, const char *opts) {
 
 bool mgos_vfs_dev_close(struct mgos_vfs_dev *dev) {
   bool ret = false;
+  if (dev == NULL) goto out;
   LOG(LL_DEBUG, ("%p refs %d", dev, dev->refs));
   if (dev->refs <= 0) {
-    ret = dev->ops->close(dev);
+    ret = (dev->ops->close(dev) == MGOS_VFS_DEV_ERR_NONE);
     if (ret) free(dev);
   }
+out:
   return ret;
 }
