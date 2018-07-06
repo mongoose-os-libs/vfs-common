@@ -90,27 +90,30 @@ int stm32_flash_get_sector_size(int sector) {
   return s_stm32_flash_layout[sector];
 }
 
-bool stm32_flash_write_region(int offset, int len, const void *src) {
+IRAM bool stm32_flash_write_region(int offset, int len, const void *src) {
   bool res = false;
   if (offset < 0 || len < 0 || offset + len > FLASH_SIZE) goto out;
-  HAL_FLASH_Unlock();
-  uint8_t *dst = (uint8_t *) (FLASH_BASE + offset), *p = dst;
+  volatile uint8_t *dst = (uint8_t *) (FLASH_BASE + offset), *p = dst;
   const uint8_t *q = (const uint8_t *) src;
+  HAL_FLASH_Unlock();
   __HAL_FLASH_CLEAR_FLAG(FLASH_ERR_FLAGS);
-  for (int i = 0; i < len; i++, p++, q++) {
+  res = true;
+  for (int i = 0; i < len && res; i++, p++, q++) {
+    mgos_ints_disable();
+    while (__HAL_FLASH_GET_FLAG(FLASH_FLAG_BSY) != 0) {
+    }
     FLASH->CR = FLASH_PSIZE_BYTE | FLASH_CR_PG;
     __DSB();
-    mgos_ints_disable();
     *p = *q;
     __DSB();
     while (__HAL_FLASH_GET_FLAG(FLASH_FLAG_BSY) != 0) {
     }
     mgos_ints_enable();
-    if (__HAL_FLASH_GET_FLAG(FLASH_ERR_FLAGS) != 0) goto out_unlock;
+    res = (__HAL_FLASH_GET_FLAG(FLASH_ERR_FLAGS) == 0);
+    CLEAR_BIT(FLASH->CR, FLASH_CR_PG);
   }
   stm32_flush_caches();
-  res = (memcmp(src, dst, len) == 0);
-out_unlock:
+  res = (memcmp(src, (const void *) dst, len) == 0);
   HAL_FLASH_Lock();
 out:
   return res;

@@ -34,6 +34,9 @@
 extern const unsigned char fs_zip[];
 extern const char _fs_bin_start, _fs_bin_end;
 
+/* Note: This a mutable flag on flash. */
+const uint8_t f_fs_created = 0xff;
+
 static bool stm32_fs_extract(void) {
   bool res = false;
   FILE *fp = NULL;
@@ -75,22 +78,38 @@ out:
   return res;
 }
 
+bool stm32_fs_create(const char *fsdt, const char *fsdo, const char *fst,
+                     const char *fso) {
+  LOG(LL_INFO, ("Creating FS..."));
+  bool res = false;
+  if (!mgos_vfs_mkfs(fsdt, fsdo, fst, fso)) goto out;
+  if (!mgos_vfs_mount("/", fsdt, fsdo, fst, fso)) goto out;
+  LOG(LL_INFO, ("Extracting FS..."));
+  if (!stm32_fs_extract()) goto out;
+  mgos_vfs_print_fs_info("/");
+  res = true;
+out:
+  return res;
+}
+
 bool mgos_core_fs_init(void) {
+  bool res = false;
   const char *fsdt = CS_STRINGIFY_MACRO(MGOS_FS_DEV_TYPE);
   const char *fsdo = CS_STRINGIFY_MACRO(MGOS_FS_DEV_OPTS);
   const char *fst = CS_STRINGIFY_MACRO(MGOS_FS_TYPE);
   const char *fso = CS_STRINGIFY_MACRO(MGOS_FS_OPTS);
-  bool res = mgos_vfs_mount("/", fsdt, fsdo, fst, fso);
-  if (!res) {
-    LOG(LL_INFO, ("Creating FS..."));
-    res = mgos_vfs_mkfs(fsdt, fsdo, fst, fso);
-    if (!res) goto out;
+  /* Volatile to prevent compiler optimizations. */
+  volatile const uint8_t *fp = &f_fs_created;
+  int offset = (intptr_t)(((uint8_t *) &f_fs_created) - FLASH_BASE);
+  if (*fp == 0) {
     res = mgos_vfs_mount("/", fsdt, fsdo, fst, fso);
-    LOG(LL_INFO, ("Extracting FS..."));
-    res = stm32_fs_extract();
-    mgos_vfs_print_fs_info("/");
+  } else {
+    res = stm32_fs_create(fsdt, fsdo, fst, fso);
+    if (res) {
+      uint8_t val = 0;
+      res = stm32_flash_write_region(offset, 1, &val);
+    }
   }
-out:
   return res;
 }
 
