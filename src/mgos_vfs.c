@@ -37,14 +37,14 @@
 #define MAKE_VFD(mount_id, fs_fd) (((mount_id) << 8) | ((fs_fd) &0xff))
 #define MOUNT_ID_FROM_VFD(fd) (((fd) >> 8) & 0xff)
 
-struct mgos_vfs_fs_entry {
+struct mgos_vfs_fs_type_entry {
   const char *type;
   const struct mgos_vfs_fs_ops *ops;
-  SLIST_ENTRY(mgos_vfs_fs_entry) next;
+  SLIST_ENTRY(mgos_vfs_fs_type_entry) next;
 };
 
-static SLIST_HEAD(s_fses,
-                  mgos_vfs_fs_entry) s_fses = SLIST_HEAD_INITIALIZER(s_fses);
+static SLIST_HEAD(s_fs_types, mgos_vfs_fs_type_entry)
+    s_fs_types = SLIST_HEAD_INITIALIZER(s_fs_types);
 
 struct mgos_vfs_mount_entry {
   int mount_id;
@@ -65,12 +65,12 @@ bool mgos_vfs_fs_register_type(const char *type,
     LOG(LL_ERROR, ("%s: not all required methods are implemented", type));
     abort();
   }
-  struct mgos_vfs_fs_entry *fe =
-      (struct mgos_vfs_fs_entry *) calloc(1, sizeof(*fe));
-  if (fe == NULL) return false;
-  fe->type = type;
-  fe->ops = ops;
-  SLIST_INSERT_HEAD(&s_fses, fe, next);
+  struct mgos_vfs_fs_type_entry *fte =
+      (struct mgos_vfs_fs_type_entry *) calloc(1, sizeof(*fte));
+  if (fte == NULL) return false;
+  fte->type = type;
+  fte->ops = ops;
+  SLIST_INSERT_HEAD(&s_fs_types, fte, next);
   return true;
 }
 
@@ -82,73 +82,102 @@ static inline void mgos_vfs_unlock(void) {
   mgos_unlock();
 }
 
+static const struct mgos_vfs_fs_type_entry *find_fs_type(const char *fs_type) {
+  struct mgos_vfs_fs_type_entry *fte = NULL;
+  mgos_vfs_lock();
+  SLIST_FOREACH(fte, &s_fs_types, next) {
+    if (strcmp(fs_type, fte->type) == 0) break;
+  }
+  mgos_vfs_unlock();
+  if (fte == NULL) {
+    LOG(LL_ERROR, ("Unknown FS type %s", fs_type));
+    return false;
+  }
+  return fte;
+}
+
+bool mgos_vfs_mkfs_dev(struct mgos_vfs_dev *dev, const char *fs_type,
+                       const char *fs_opts) {
+  LOG(LL_INFO, ("Create %s (dev %p, opts %s)", fs_type, dev, fs_opts));
+  const struct mgos_vfs_fs_type_entry *fte = find_fs_type(fs_type);
+  if (fte == NULL) return false;
+  struct mgos_vfs_fs fs = {.type = fte->type, .ops = fte->ops, .dev = dev};
+  bool res = (fs.ops->mkfs(&fs, fs_opts));
+  if (!res) {
+    LOG(LL_INFO, ("FS %s %s: create failed", fs_type, fs_opts));
+  }
+  return res;
+}
+
+bool mgos_vfs_mkfs_dev_name(const char *dev_name, const char *fs_type,
+                            const char *fs_opts) {
+  struct mgos_vfs_dev *dev = mgos_vfs_dev_open(dev_name);
+  if (dev == NULL) return false;
+  bool res = mgos_vfs_mkfs_dev(dev, fs_type, fs_opts);
+  mgos_vfs_dev_close(dev);
+  return res;
+}
+
 bool mgos_vfs_mkfs(const char *dev_type, const char *dev_opts,
                    const char *fs_type, const char *fs_opts) {
   struct mgos_vfs_dev *dev = NULL;
-  struct mgos_vfs_fs_entry *fe = NULL;
-  if (fs_type == NULL) return NULL;
-  SLIST_FOREACH(fe, &s_fses, next) {
-    if (strcmp(fs_type, fe->type) == 0) {
-      bool ret = false;
-      if (fs_opts == NULL) fs_opts = "";
-      if (dev_type != NULL) {
-        dev = mgos_vfs_dev_open(dev_type, dev_opts);
-        if (dev == NULL) return false;
-      }
-      struct mgos_vfs_fs fs = {.type = fe->type, .ops = fe->ops, .dev = dev};
-      LOG(LL_INFO, ("Create %s (dev %p, opts %s)", fs_type, dev, fs_opts));
-      ret = (fs.ops->mkfs(&fs, fs_opts));
-      if (!ret) {
-        LOG(LL_INFO, ("FS %s %s: create failed", fs_type, fs_opts));
-      }
-      if (dev != NULL) mgos_vfs_dev_close(dev);
-      return ret;
-    }
-  };
-  LOG(LL_INFO, ("Unknown FS type %s", fs_type));
-  return false;
+  if (fs_opts == NULL) fs_opts = "";
+  if (dev_type != NULL) {
+    dev = mgos_vfs_dev_create(dev_type, dev_opts);
+    if (dev == NULL) return false;
+  }
+  bool res = mgos_vfs_mkfs_dev(dev, fs_type, fs_opts);
+  if (dev != NULL) mgos_vfs_dev_close(dev);
+  return res;
+}
+
+bool mgos_vfs_mount_dev(const char *path, struct mgos_vfs_dev *dev,
+                        const char *fs_type, const char *fs_opts) {
+  const struct mgos_vfs_fs_type_entry *fte = find_fs_type(fs_type);
+  if (fte == NULL) return false;
+  if (path == NULL || path[0] != DIRSEP || fs_type == NULL) {
+    return false;
+  }
+  if (fs_opts == NULL) fs_opts = "";
+  struct mgos_vfs_fs *fs = (struct mgos_vfs_fs *) calloc(1, sizeof(*fs));
+  if (fs == NULL) return false;
+  fs->type = fte->type;
+  fs->ops = fte->ops;
+  fs->dev = dev;
+  LOG(LL_INFO, ("%s: %s @ %s, opts %s -> %p", path, fs_type,
+                (dev->name ? dev->name : ""), fs_opts, fs));
+  if (fs->ops->mount(fs, fs_opts)) {
+    mgos_vfs_hal_mount(path, fs);
+    mgos_vfs_print_fs_info(path);
+    if (fs->dev != NULL) fs->dev->refs++;
+    return true;
+  } else {
+    free(fs);
+    LOG(LL_INFO, ("FS %s %s: mount failed", fs_type, fs_opts));
+    return false;
+  }
+}
+
+bool mgos_vfs_mount_dev_name(const char *path, const char *dev_name,
+                             const char *fs_type, const char *fs_opts) {
+  struct mgos_vfs_dev *dev = mgos_vfs_dev_open(dev_name);
+  if (dev == NULL) return false;
+  bool res = mgos_vfs_mount_dev(path, dev, fs_type, fs_opts);
+  mgos_vfs_dev_close(dev);
+  return res;
 }
 
 bool mgos_vfs_mount(const char *path, const char *dev_type,
                     const char *dev_opts, const char *fs_type,
                     const char *fs_opts) {
   struct mgos_vfs_dev *dev = NULL;
-  struct mgos_vfs_fs *fs = NULL;
-  struct mgos_vfs_fs_entry *fe = NULL;
-  if (path == NULL || path[0] != DIRSEP || fs_type == NULL) {
-    return NULL;
-  }
-  SLIST_FOREACH(fe, &s_fses, next) {
-    if (strcmp(fs_type, fe->type) == 0) {
-      if (fs_opts == NULL) fs_opts = "";
-      if (dev_type != NULL) {
-        dev = mgos_vfs_dev_open(dev_type, dev_opts);
-        if (dev == NULL) return false;
-        dev->refs++;
-      }
-      fs = (struct mgos_vfs_fs *) calloc(1, sizeof(*fs));
-      if (fs == NULL) break;
-      fs->type = fe->type;
-      fs->ops = fe->ops;
-      fs->dev = dev;
-      LOG(LL_INFO, ("Mount %s @ %s (dev %p, opts %s) -> %p", fs_type, path, dev,
-                    fs_opts, fs));
-      if (fs->ops->mount(fs, fs_opts)) {
-        mgos_vfs_hal_mount(path, fs);
-        mgos_vfs_print_fs_info(path);
-        return true;
-      } else {
-        free(fs);
-        LOG(LL_INFO, ("FS %s %s: mount failed", fs_type, fs_opts));
-        if (dev != NULL) mgos_vfs_dev_close(dev);
-        return false;
-      }
-    }
+  if (dev_type != NULL) {
+    dev = mgos_vfs_dev_create(dev_type, dev_opts);
+    if (dev == NULL) return false;
   };
-  if (fs == NULL) {
-    LOG(LL_INFO, ("Unknown FS type %s", fs_type));
-  }
-  return false;
+  bool res = mgos_vfs_mount_dev(path, dev, fs_type, fs_opts);
+  if (dev != NULL) mgos_vfs_dev_close(dev);
+  return res;
 }
 
 char *mgos_realpath(const char *path, char *resolved_path) {
@@ -289,6 +318,7 @@ void mgos_vfs_print_fs_info(const char *path) {
                 (unsigned int) fs->ops->get_space_total(fs),
                 (unsigned int) fs->ops->get_space_used(fs),
                 (unsigned int) fs->ops->get_space_free(fs)));
+  fs->refs--;
 }
 
 int mgos_vfs_open(const char *path, int flags, int mode) {
@@ -913,17 +943,22 @@ void mgos_fs_gc(void) {
 
 static bool mgos_vfs_umount_entry(struct mgos_vfs_mount_entry *me, bool force) {
   bool ret = false;
-  if (me->fs->refs > 0 && !force) {
-    errno = EBUSY;
-    return false;
+  if (me->fs->refs > 0) {
+    if (!force) {
+      errno = EBUSY;
+      return false;
+    } else {
+      LOG(LL_WARN,
+          ("%s: forced unmount with %d refs", me->prefix, me->fs->refs));
+    }
   }
   SLIST_REMOVE(&s_mounts, me, mgos_vfs_mount_entry, next);
   ret = me->fs->ops->umount(me->fs);
   if (ret) {
-    if (me->fs->dev) {
-      me->fs->dev->refs--;
+    if (me->fs->dev != NULL) {
       mgos_vfs_dev_close(me->fs->dev);
     }
+    memset(me, 0, sizeof(*me));
     free(me->fs);
     free(me);
   }
@@ -936,14 +971,13 @@ bool mgos_vfs_umount(const char *path) {
   struct mgos_vfs_mount_entry *me = find_mount_by_path(path, NULL);
   if (me == NULL) return false;
   mgos_vfs_lock();
-  me->fs->refs--; /* Drop the ref taken by find */
   fs = me->fs;
+  fs->refs--; /* Drop the ref taken by find */
+  LOG(LL_DEBUG, ("%s refs %d %d", path, fs->refs, fs->dev->refs));
   if (strcmp(me->prefix, path) == 0) { /* Must specify mount point exactly */
     ret = mgos_vfs_umount_entry(me, false);
   }
   mgos_vfs_unlock();
-  LOG(LL_INFO, ("%s %p %d", path, fs, ret));
-  (void) fs;
   return ret;
 }
 
@@ -954,6 +988,7 @@ void mgos_vfs_umount_all(void) {
   SLIST_FOREACH_SAFE(me, &s_mounts, next, met) {
     mgos_vfs_umount_entry(me, true /* force */);
   }
+  mgos_vfs_dev_unregister_all();
   mgos_vfs_unlock();
 }
 

@@ -22,14 +22,15 @@
 #include "common/cs_dbg.h"
 #include "common/queue.h"
 
-struct mgos_vfs_dev_entry {
+struct mgos_vfs_dev_type_entry {
   const char *type;
   const struct mgos_vfs_dev_ops *ops;
-  SLIST_ENTRY(mgos_vfs_dev_entry) next;
+  SLIST_ENTRY(mgos_vfs_dev_type_entry) next;
 };
 
-static SLIST_HEAD(s_devs,
-                  mgos_vfs_dev_entry) s_devs = SLIST_HEAD_INITIALIZER(s_devs);
+static SLIST_HEAD(s_dev_types, mgos_vfs_dev_type_entry)
+    s_dev_types = SLIST_HEAD_INITIALIZER(s_dev_types);
+static SLIST_HEAD(s_devs, mgos_vfs_dev) s_devs = SLIST_HEAD_INITIALIZER(s_devs);
 
 bool mgos_vfs_dev_register_type(const char *type,
                                 const struct mgos_vfs_dev_ops *ops) {
@@ -39,25 +40,28 @@ bool mgos_vfs_dev_register_type(const char *type,
     LOG(LL_ERROR, ("%s: not all methods are implemented", type));
     abort();
   }
-  struct mgos_vfs_dev_entry *de =
-      (struct mgos_vfs_dev_entry *) calloc(1, sizeof(*de));
-  if (de == NULL) return false;
-  de->type = type;
-  de->ops = ops;
-  SLIST_INSERT_HEAD(&s_devs, de, next);
+  struct mgos_vfs_dev_type_entry *dte =
+      (struct mgos_vfs_dev_type_entry *) calloc(1, sizeof(*dte));
+  if (dte == NULL) return false;
+  dte->type = type;
+  dte->ops = ops;
+  SLIST_INSERT_HEAD(&s_dev_types, dte, next);
   return true;
 }
 
-struct mgos_vfs_dev *mgos_vfs_dev_open(const char *type, const char *opts) {
+static struct mgos_vfs_dev *mgos_vfs_dev_create_int(const char *type,
+                                                    const char *opts,
+                                                    const char *name) {
   struct mgos_vfs_dev *dev = NULL;
-  struct mgos_vfs_dev_entry *de;
-  SLIST_FOREACH(de, &s_devs, next) {
-    if (strcmp(type, de->type) == 0) {
+  struct mgos_vfs_dev_type_entry *dte;
+  SLIST_FOREACH(dte, &s_dev_types, next) {
+    if (strcmp(type, dte->type) == 0) {
       if (opts == NULL) opts = "";
       dev = (struct mgos_vfs_dev *) calloc(1, sizeof(*dev));
-      LOG(LL_INFO, ("%s (%s) -> %p", type, opts, dev));
-      dev->ops = de->ops;
-      enum mgos_vfs_dev_err dres = de->ops->open(dev, opts);
+      if (name != NULL) LOG(LL_INFO, ("%s: %s (%s)", name, type, opts));
+      dev->ops = dte->ops;
+      dev->refs = 1;
+      enum mgos_vfs_dev_err dres = dev->ops->open(dev, opts);
       if (dres != 0) {
         LOG(LL_ERROR, ("Dev %s %s open failed: %d", type, opts, dres));
         free(dev);
@@ -65,19 +69,96 @@ struct mgos_vfs_dev *mgos_vfs_dev_open(const char *type, const char *opts) {
       }
       return dev;
     }
-  };
+  }
   LOG(LL_ERROR, ("Unknown device type %s", type));
   return NULL;
+}
+
+struct mgos_vfs_dev *mgos_vfs_dev_create(const char *type, const char *opts) {
+  return mgos_vfs_dev_create_int(type, opts, NULL);
+}
+
+bool mgos_vfs_dev_register(struct mgos_vfs_dev *dev, const char *name) {
+  if (dev == NULL || name == NULL || name[0] == '\0') return false;
+  struct mgos_vfs_dev *d;
+  SLIST_FOREACH(d, &s_devs, next) {
+    if (d == dev || strcmp(d->name, name) == 0) {
+      LOG(LL_ERROR, ("Dev %s already exists", name));
+      return false;
+    }
+  }
+  dev->name = strdup(name);
+  dev->refs++;
+  SLIST_INSERT_HEAD(&s_devs, dev, next);
+  return true;
+}
+
+bool mgos_vfs_dev_create_and_register(const char *type, const char *opts,
+                                      const char *name) {
+  if (name == NULL) return false;
+  struct mgos_vfs_dev *dev = mgos_vfs_dev_create_int(type, opts, name);
+  if (dev == NULL) return false;
+  bool res = mgos_vfs_dev_register(dev, name);
+  mgos_vfs_dev_close(dev);
+  return res;
+}
+
+static struct mgos_vfs_dev *find_dev(const char *name) {
+  struct mgos_vfs_dev *dev;
+  if (name == NULL) return false;
+  SLIST_FOREACH(dev, &s_devs, next) {
+    if (strcmp(dev->name, name) == 0) break;
+  }
+  return dev;
+}
+
+struct mgos_vfs_dev *mgos_vfs_dev_open(const char *name) {
+  struct mgos_vfs_dev *dev = find_dev(name);
+  if (dev != NULL) {
+    dev->refs++;
+  } else {
+    LOG(LL_ERROR, ("No such device %s", name));
+  }
+  return dev;
 }
 
 bool mgos_vfs_dev_close(struct mgos_vfs_dev *dev) {
   bool ret = false;
   if (dev == NULL) goto out;
-  LOG(LL_DEBUG, ("%p refs %d", dev, dev->refs));
+  dev->refs--;
+  LOG(LL_DEBUG, ("%s refs %d", (dev->name ? dev->name : ""), dev->refs));
   if (dev->refs <= 0) {
+    if (dev->name != NULL) {
+      SLIST_REMOVE(&s_devs, dev, mgos_vfs_dev, next);
+      free(dev->name);
+      dev->name = NULL;
+    }
     ret = (dev->ops->close(dev) == MGOS_VFS_DEV_ERR_NONE);
-    if (ret) free(dev);
+    memset(dev, 0, sizeof(*dev));
+    free(dev);
   }
 out:
   return ret;
+}
+
+bool mgos_vfs_dev_unregister(const char *name) {
+  struct mgos_vfs_dev *dev = find_dev(name);
+  if (dev == NULL) return false;
+  if (dev->refs > 1) {
+    /* This dev is still alive, just remove the name. */
+    SLIST_REMOVE(&s_devs, dev, mgos_vfs_dev, next);
+    free(dev->name);
+    dev->name = NULL;
+  } else {
+    mgos_vfs_dev_close(dev);
+  }
+  return true;
+}
+
+bool mgos_vfs_dev_unregister_all(void) {
+  struct mgos_vfs_dev *dev, *devt;
+  SLIST_FOREACH_SAFE(dev, &s_devs, next, devt) {
+    mgos_vfs_dev_unregister(dev->name);
+  }
+  return true;
 }

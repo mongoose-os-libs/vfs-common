@@ -18,7 +18,6 @@
 #include <stdlib.h>
 
 #include "common/platform.h"
-#include "common/queue.h"
 
 #include "mgos_vfs_dev.h"
 
@@ -32,6 +31,8 @@
 #endif
 #endif /* CS_MMAP */
 
+#define MGOS_VFS_ROOT_DEV_NAME "root"
+
 /* Convert virtual fd to filesystem-specific fd */
 #define MGOS_VFS_VFD_TO_FS_FD(vfd) ((vfd) &0xff)
 
@@ -40,11 +41,11 @@ extern "C" {
 #endif
 
 struct mgos_vfs_fs {
-  int refs;
   const char *type;
   const struct mgos_vfs_fs_ops *ops;
   struct mgos_vfs_dev *dev;
   void *fs_data;
+  int refs;
 };
 
 #ifdef CS_MMAP
@@ -183,7 +184,7 @@ bool mgos_vfs_fs_register_type(const char *type,
 
 /*
  * Create a filesystem.
- * First a device is opened with given type and options and then filesystem
+ * First a device is created with given type and options and then filesystem
  * is created on it. Device and filesystem types must've been previosuly
  * registered and options have device and filesystem-specific format
  * and usually are JSON objects.
@@ -191,9 +192,15 @@ bool mgos_vfs_fs_register_type(const char *type,
 bool mgos_vfs_mkfs(const char *dev_type, const char *dev_opts,
                    const char *fs_type, const char *fs_opts);
 
+/* Create a filesystem on an existing device. */
+bool mgos_vfs_mkfs_dev(struct mgos_vfs_dev *dev, const char *fs_type,
+                       const char *fs_opts);
+bool mgos_vfs_mkfs_dev_name(const char *dev_name, const char *fs_type,
+                            const char *fs_opts);
+
 /*
  * Mount a filesystem.
- * First a device is opened with given type and options and then filesystem
+ * First a device is created with given type and options and then filesystem
  * is mounted from it and attached to the VFS at a given path.
  * Path must start with a "/" and consist of one component, e.g. "/mnt".
  * Nested mounts are not currently supported, so "/mnt/foo" is not ok.
@@ -203,6 +210,15 @@ bool mgos_vfs_mkfs(const char *dev_type, const char *dev_opts,
 bool mgos_vfs_mount(const char *path, const char *dev_type,
                     const char *dev_opts, const char *fs_type,
                     const char *fs_opts);
+
+bool mgos_vfs_mount_dev(const char *path, struct mgos_vfs_dev *dev,
+                        const char *fs_type, const char *fs_opts);
+
+/*
+ * Mount a filesystem from an existing device.
+ */
+bool mgos_vfs_mount_dev_name(const char *path, const char *dev_name,
+                             const char *fs_type, const char *fs_opts);
 
 /*
  * Unmount a previously mounted filesystem.

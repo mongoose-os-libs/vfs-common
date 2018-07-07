@@ -10,14 +10,18 @@
 #include <stdint.h>
 #include <stdlib.h>
 
+#include "common/queue.h"
+
 #ifdef __cplusplus
 extern "C" {
 #endif
 
 struct mgos_vfs_dev {
   const struct mgos_vfs_dev_ops *ops;
+  char *name;
   void *dev_data;
   int refs;
+  SLIST_ENTRY(mgos_vfs_dev) next;
 };
 
 enum mgos_vfs_dev_err {
@@ -49,9 +53,40 @@ struct mgos_vfs_dev_ops {
 bool mgos_vfs_dev_register_type(const char *name,
                                 const struct mgos_vfs_dev_ops *ops);
 
-struct mgos_vfs_dev *mgos_vfs_dev_open(const char *name, const char *opts);
+/*
+ * Creates a device of a given type with specified options.
+ * Note that created device carries a refcount of 1 and should be closed when no
+ * longer needed.
+ * Optionally registers under specified name (can be NULL to skip).
+ */
+struct mgos_vfs_dev *mgos_vfs_dev_create(const char *type, const char *opts);
+bool mgos_vfs_dev_create_and_register(const char *type, const char *opts,
+                                      const char *name);
 
+/*
+ * Register a device under a name so it can be can be open-ed() later.
+ * This adds a reference to the device so it is safe to close a newly-created
+ * device after registering it.
+ * If name is NULL or empty, does nothing (successfully).
+ */
+bool mgos_vfs_dev_register(struct mgos_vfs_dev *dev, const char *name);
+
+/* Open a previously registered device. */
+struct mgos_vfs_dev *mgos_vfs_dev_open(const char *name);
+
+/*
+ * Unregister a previously registered device.
+ * This drops a reference added when registering but the device may not be
+ * destroyed
+ * immediately if it is currently opened.
+ * If name is NULL or empty, does nothing (successfully).
+ */
+bool mgos_vfs_dev_unregister(const char *name);
+
+/* Close a previpously opened or created device. */
 bool mgos_vfs_dev_close(struct mgos_vfs_dev *dev);
+
+bool mgos_vfs_dev_unregister_all(void);
 
 #ifdef __cplusplus
 }
