@@ -168,14 +168,25 @@ bool mgos_vfs_dev_unregister_all(void) {
   return true;
 }
 
-/* TI libc does not have strsep.
- * TDOO(rojer): figure it out. */
-#ifndef __TI_COMPILER_VERSION__
+static char *next_field(char **stringp, const char *delim) {
+  char *ret = *stringp, *p = *stringp;
+  if (p != NULL) {
+    *stringp = NULL;
+    for (; *p != '\0' && *stringp == NULL; p++) {
+      while (strchr(delim, *p) != NULL) {
+        *p = '\0';
+        *stringp = ++p;
+      }
+    }
+  }
+  return ret;
+}
+
 static bool mgos_process_devtab_entry(char *e) {
   bool res = false;
   const char *e_orig = e;
-  const char *name = strsep(&e, " \t");
-  const char *type = strsep(&e, " \t");
+  const char *name = next_field(&e, " \t");
+  const char *type = next_field(&e, " \t");
   const char *opts = e;
   if (name == NULL || type == NULL) {
     LOG(LL_ERROR, ("Invalid devtab entry '%s'", e_orig));
@@ -190,7 +201,7 @@ out:
 bool mgos_process_devtab(const char *dt) {
   bool res = true;
   char *dtc = strdup(dt), *s = dtc, *e;
-  while (res && (e = strsep(&s, "|\r\n")) != NULL) {
+  while (res && (e = next_field(&s, "|\r\n")) != NULL) {
     struct mg_str es = mg_strstrip(mg_mk_str(e));
     *((char *) es.p + es.len) = '\0';
     if (es.len == 0 || *es.p == '#') continue;
@@ -199,8 +210,3 @@ bool mgos_process_devtab(const char *dt) {
   free(dtc);
   return res;
 }
-#else
-bool mgos_process_devtab(const char *dt) {
-  return (*dt == '\0');
-}
-#endif /* __TI_COMPILER_VERSION__ */
