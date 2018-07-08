@@ -40,30 +40,28 @@
 #endif
 
 struct dev_data {
-  size_t addr;
+  size_t offset;
   size_t size;
 };
 
 static bool check_bounds(const struct dev_data *dd, size_t offset, size_t len) {
-  return (dd->addr <= FLASH_SIZE && dd->size <= FLASH_SIZE &&
-          dd->addr + dd->size <= FLASH_SIZE && offset <= FLASH_SIZE &&
-          len <= FLASH_SIZE && dd->addr + offset + len <= FLASH_SIZE);
+  return (dd->offset <= FLASH_SIZE && dd->size <= FLASH_SIZE &&
+          dd->offset + dd->size <= FLASH_SIZE && offset <= FLASH_SIZE &&
+          len <= FLASH_SIZE && dd->offset + offset + len <= FLASH_SIZE);
 }
 
 static enum mgos_vfs_dev_err stm32_vfs_dev_flash_open(struct mgos_vfs_dev *dev,
                                                       const char *opts) {
   enum mgos_vfs_dev_err res = MGOS_VFS_DEV_ERR_INVAL;
   struct dev_data *dd = (struct dev_data *) calloc(1, sizeof(*dd));
+  dd->offset = 0;
+  dd->size = FLASH_SIZE;
   if (opts != NULL) {
-    json_scanf(opts, strlen(opts), "{addr: %u, size: %u}", &dd->addr,
+    json_scanf(opts, strlen(opts), "{offset: %u, size: %u}", &dd->offset,
                &dd->size);
   }
-  if (dd->addr == 0 || dd->size == 0) {
-    LOG(LL_INFO, ("addr and size are required"));
-    goto out;
-  }
   if (!check_bounds(dd, 0, 0)) {
-    LOG(LL_INFO, ("invalid settings: %u %u (flash size: %u)", dd->addr,
+    LOG(LL_INFO, ("invalid settings: %u %u (flash size: %u)", dd->offset,
                   dd->size, FLASH_SIZE));
     goto out;
   }
@@ -81,7 +79,7 @@ static enum mgos_vfs_dev_err stm32_vfs_dev_flash_read(struct mgos_vfs_dev *dev,
   enum mgos_vfs_dev_err res = MGOS_VFS_DEV_ERR_INVAL;
   const struct dev_data *dd = (struct dev_data *) dev->dev_data;
   if (check_bounds(dd, offset, len)) {
-    memcpy(dst, (uint8_t *) (FLASH_BASE + dd->addr + offset), len);
+    memcpy(dst, (uint8_t *) (FLASH_BASE + dd->offset + offset), len);
     res = MGOS_VFS_DEV_ERR_NONE;
   }
   LOG((res == 0 ? LL_VERBOSE_DEBUG : LL_ERROR),
@@ -96,7 +94,7 @@ static enum mgos_vfs_dev_err stm32_vfs_dev_flash_write(struct mgos_vfs_dev *dev,
   enum mgos_vfs_dev_err res = MGOS_VFS_DEV_ERR_INVAL;
   const struct dev_data *dd = (struct dev_data *) dev->dev_data;
   if (!check_bounds(dd, offset, len)) goto out;
-  if (!stm32_flash_write_region(dd->addr + offset, len, src)) {
+  if (!stm32_flash_write_region(dd->offset + offset, len, src)) {
     res = MGOS_VFS_DEV_ERR_IO;
     goto out;
   }
@@ -114,7 +112,7 @@ static enum mgos_vfs_dev_err stm32_vfs_dev_flash_erase(struct mgos_vfs_dev *dev,
   uint8_t *tmp = NULL;
   const struct dev_data *dd = (struct dev_data *) dev->dev_data;
   if (!check_bounds(dd, offset, len)) goto out;
-  int abs_offset = dd->addr + offset;
+  int abs_offset = dd->offset + offset;
   int sector = stm32_flash_get_sector(abs_offset);
   if (sector < 0) goto out;
   int sector_offset = stm32_flash_get_sector_offset(sector);

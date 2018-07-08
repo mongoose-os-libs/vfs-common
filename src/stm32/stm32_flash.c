@@ -37,7 +37,7 @@
    FLASH_FLAG_PGPERR | FLASH_FLAG_ERSERR)
 #endif
 
-const int s_stm32_flash_layout[FLASH_SECTOR_TOTAL] = {
+static const int s_stm32_flash_layout[FLASH_SECTOR_TOTAL] = {
 #if defined(STM32F4)
 #if FLASH_SIZE == 524288
     16384,  16384,  16384, 16384, 65536,

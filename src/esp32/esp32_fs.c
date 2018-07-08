@@ -35,6 +35,7 @@
 
 #include "mgos_hal.h"
 #include "mgos_vfs.h"
+#include "mgos_vfs_dev.h"
 #include "mgos_vfs_fs_spiffs.h"
 
 #include "esp32_vfs_dev_partition.h"
@@ -65,17 +66,24 @@ bool esp32_fs_mount_part(const char *label, const char *path) {
 #if CS_SPIFFS_ENABLE_ENCRYPTION
   encrypt = esp_flash_encryption_enabled();
 #endif
-  char dev_opts[100], fs_opts[100];
-  struct json_out out1 = JSON_OUT_BUF(dev_opts, sizeof(dev_opts));
-  json_printf(&out1, "{label: %Q, subtype: %d}", label,
-              ESP_PARTITION_SUBTYPE_DATA_SPIFFS);
+  char fs_opts[100];
   struct json_out out2 = JSON_OUT_BUF(fs_opts, sizeof(fs_opts));
   json_printf(&out2, "{encr: %B}", encrypt);
-  if (!mgos_vfs_mount(path, MGOS_VFS_DEV_TYPE_ESP32_PARTITION, dev_opts,
-                      MGOS_VFS_FS_TYPE_SPIFFS, fs_opts)) {
-    return false;
+  return mgos_vfs_mount_dev_name(path, label, MGOS_VFS_FS_TYPE_SPIFFS, fs_opts);
+}
+
+static void esp32_register_partition_devs(void) {
+  esp_partition_iterator_t pit = esp_partition_find(
+      ESP_PARTITION_TYPE_DATA, ESP_PARTITION_SUBTYPE_DATA_SPIFFS, NULL);
+  while (pit != NULL) {
+    const esp_partition_t *p = esp_partition_get(pit);
+    char dev_opts[100];
+    struct json_out out = JSON_OUT_BUF(dev_opts, sizeof(dev_opts));
+    json_printf(&out, "{label: %Q}", p->label);
+    mgos_vfs_dev_create_and_register(MGOS_VFS_DEV_TYPE_ESP32_PARTITION,
+                                     dev_opts, p->label);
+    pit = esp_partition_next(pit);
   }
-  return true;
 }
 
 bool mgos_core_fs_init(void) {
@@ -85,6 +93,7 @@ bool mgos_core_fs_init(void) {
     return MGOS_INIT_FS_INIT_FAILED;
   }
 #endif
+  esp32_register_partition_devs();
   const esp_partition_t *fs_part =
       esp32_find_fs_for_app_slot(esp32_get_boot_slot());
   if (fs_part == NULL) {

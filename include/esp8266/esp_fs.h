@@ -28,8 +28,8 @@ extern "C" {
 #define FLASH_SECTOR_SIZE 0x1000
 #define FLASH_ERASE_BLOCK_SIZE 0x10000
 
-bool esp_fs_init(uint32_t root_fs_addr, uint32_t root_fs_size);
-bool esp_fs_mount(const char *path, uint32_t addr, uint32_t size);
+bool esp_fs_mount(uint32_t addr, uint32_t size, const char *dev_name,
+                  const char *path);
 
 /*
  * Translate file descriptor returned by open() to the one suitable for use

@@ -83,10 +83,20 @@ struct mgos_vfs_dev *mgos_vfs_dev_open(const char *name);
  */
 bool mgos_vfs_dev_unregister(const char *name);
 
-/* Close a previpously opened or created device. */
+/* Close a previously opened or created device. */
 bool mgos_vfs_dev_close(struct mgos_vfs_dev *dev);
 
 bool mgos_vfs_dev_unregister_all(void);
+
+/*
+ * Process devtab and create devices as specified.
+ * Entries are delimited by '\n' or '|', each entry consists of 3 fields:
+ * name type opts
+ * Name is the name to register the new device under,
+ * type and opts specify device type to create and options, a JSON string.
+ * Empty entries and entries starting with '#' are ignored.
+ */
+bool mgos_process_devtab(const char *dt);
 
 #ifdef __cplusplus
 }

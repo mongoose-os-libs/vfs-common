@@ -28,6 +28,7 @@ extern "C" {
 #endif
 
 #define MGOS_VFS_DEV_TYPE_SYSFLASH "sysflash"
+#define ESP8266_SYSFLASH_DEV_NAME "sfl0"
 
 bool esp_vfs_dev_sysflash_register_type(void);
 

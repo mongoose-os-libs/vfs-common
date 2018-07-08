@@ -20,6 +20,7 @@
 #include "mgos_vfs_dev.h"
 
 #include "common/cs_dbg.h"
+#include "common/mg_str.h"
 #include "common/queue.h"
 
 struct mgos_vfs_dev_type_entry {
@@ -58,7 +59,6 @@ static struct mgos_vfs_dev *mgos_vfs_dev_create_int(const char *type,
     if (strcmp(type, dte->type) == 0) {
       if (opts == NULL) opts = "";
       dev = (struct mgos_vfs_dev *) calloc(1, sizeof(*dev));
-      if (name != NULL) LOG(LL_INFO, ("%s: %s (%s)", name, type, opts));
       dev->ops = dte->ops;
       dev->refs = 1;
       enum mgos_vfs_dev_err dres = dev->ops->open(dev, opts);
@@ -66,6 +66,11 @@ static struct mgos_vfs_dev *mgos_vfs_dev_create_int(const char *type,
         LOG(LL_ERROR, ("Dev %s %s open failed: %d", type, opts, dres));
         free(dev);
         dev = NULL;
+      } else {
+        if (name != NULL) {
+          LOG(LL_INFO, ("%s: %s (%s), size %u", name, type, opts,
+                        (unsigned int) dev->ops->get_size(dev)));
+        }
       }
       return dev;
     }
@@ -162,3 +167,40 @@ bool mgos_vfs_dev_unregister_all(void) {
   }
   return true;
 }
+
+/* TI libc does not have strsep.
+ * TDOO(rojer): figure it out. */
+#ifndef __TI_COMPILER_VERSION__
+static bool mgos_process_devtab_entry(char *e) {
+  bool res = false;
+  const char *e_orig = e;
+  const char *name = strsep(&e, " \t");
+  const char *type = strsep(&e, " \t");
+  const char *opts = e;
+  if (name == NULL || type == NULL) {
+    LOG(LL_ERROR, ("Invalid devtab entry '%s'", e_orig));
+    goto out;
+  }
+  if (opts == NULL) opts = "";
+  res = mgos_vfs_dev_create_and_register(type, opts, name);
+out:
+  return res;
+}
+
+bool mgos_process_devtab(const char *dt) {
+  bool res = true;
+  char *dtc = strdup(dt), *s = dtc, *e;
+  while (res && (e = strsep(&s, "|\r\n")) != NULL) {
+    struct mg_str es = mg_strstrip(mg_mk_str(e));
+    *((char *) es.p + es.len) = '\0';
+    if (es.len == 0 || *es.p == '#') continue;
+    res = mgos_process_devtab_entry((char *) es.p);
+  }
+  free(dtc);
+  return res;
+}
+#else
+bool mgos_process_devtab(const char *dt) {
+  return (*dt == '\0');
+}
+#endif /* __TI_COMPILER_VERSION__ */

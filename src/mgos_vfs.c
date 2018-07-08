@@ -144,8 +144,8 @@ bool mgos_vfs_mount_dev(const char *path, struct mgos_vfs_dev *dev,
   fs->type = fte->type;
   fs->ops = fte->ops;
   fs->dev = dev;
-  LOG(LL_INFO, ("%s: %s @ %s, opts %s -> %p", path, fs_type,
-                (dev->name ? dev->name : ""), fs_opts, fs));
+  LOG(LL_INFO, ("%s: %s @ %s, opts %s", path, fs_type,
+                (dev->name ? dev->name : ""), fs_opts));
   if (fs->ops->mount(fs, fs_opts)) {
     mgos_vfs_hal_mount(path, fs);
     mgos_vfs_print_fs_info(path);

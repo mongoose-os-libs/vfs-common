@@ -31,10 +31,14 @@
 
 #include "stm32_sdk_hal.h"
 
-extern const unsigned char fs_zip[];
-extern const char _fs_bin_start, _fs_bin_end;
+#define STM32_ROOT_DEV_NAME "fs0"
 
-/* Note: This a mutable flag on flash. */
+#if MGOS_ROOT_FS_EXTRACT
+extern const unsigned char fs_zip[];
+extern unsigned int fs_zip_len;
+
+/* Note: This a mutable flag on flash. It's a super-cheesy way of doing it,
+ * but it'll do until OTA and hopefully a better way comes along. */
 const uint8_t f_fs_created = 0xff;
 
 static bool stm32_fs_extract(void) {
@@ -42,8 +46,7 @@ static bool stm32_fs_extract(void) {
   FILE *fp = NULL;
   void *data = NULL;
   mz_zip_archive zip = {0};
-  uintptr_t fs_size = &_fs_bin_end - &_fs_bin_start;
-  mz_bool zs = mz_zip_reader_init_mem(&zip, &fs_zip[0], fs_size, 0);
+  mz_bool zs = mz_zip_reader_init_mem(&zip, &fs_zip[0], fs_zip_len, 0);
   if (!zs) return false;
   int num_files = (int) mz_zip_reader_get_num_files(&zip);
   for (int i = 0; i < num_files; i++) {
@@ -78,39 +81,52 @@ out:
   return res;
 }
 
-bool stm32_fs_create(const char *fsdt, const char *fsdo, const char *fst,
-                     const char *fso) {
+static bool stm32_fs_create(const char *dev_name, const char *fs_type,
+                            const char *fs_opts) {
   LOG(LL_INFO, ("Creating FS..."));
   bool res = false;
-  if (!mgos_vfs_mkfs(fsdt, fsdo, fst, fso)) goto out;
-  if (!mgos_vfs_mount("/", fsdt, fsdo, fst, fso)) goto out;
+  if (!mgos_vfs_mkfs_dev_name(dev_name, fs_type, fs_opts)) goto out;
+  if (!mgos_vfs_mount_dev_name("/", dev_name, fs_type, fs_opts)) goto out;
   LOG(LL_INFO, ("Extracting FS..."));
   if (!stm32_fs_extract()) goto out;
-  mgos_vfs_print_fs_info("/");
-  res = true;
+  res = mgos_vfs_umount("/");
 out:
   return res;
 }
 
-bool mgos_core_fs_init(void) {
+bool stm32_fs_create_if_needed(const char *dev_name, const char *fs_type,
+                               const char *fs_opts) {
   bool res = false;
-  const char *fsdt = CS_STRINGIFY_MACRO(MGOS_FS_DEV_TYPE);
-  const char *fsdo = CS_STRINGIFY_MACRO(MGOS_FS_DEV_OPTS);
-  const char *fst = CS_STRINGIFY_MACRO(MGOS_FS_TYPE);
-  const char *fso = CS_STRINGIFY_MACRO(MGOS_FS_OPTS);
   /* Volatile to prevent compiler optimizations. */
   volatile const uint8_t *fp = &f_fs_created;
   int offset = (intptr_t)(((uint8_t *) &f_fs_created) - FLASH_BASE);
-  if (*fp == 0) {
-    res = mgos_vfs_mount("/", fsdt, fsdo, fst, fso);
-  } else {
-    res = stm32_fs_create(fsdt, fsdo, fst, fso);
+  if (*fp != 0) {
+    res = stm32_fs_create(dev_name, fs_type, fs_opts);
     if (res) {
       uint8_t val = 0;
       res = stm32_flash_write_region(offset, 1, &val);
     }
+  } else {
+    res = true;
   }
   return res;
+}
+#else
+static bool stm32_fs_create_if_needed(const char *dev_name, const char *fs_type,
+                                      const char *fs_opts) {
+  (void) dev_name;
+  (void) fs_type;
+  (void) fs_opts;
+  return true;
+}
+#endif /* MGOS_ROOT_FS_EXTRACT */
+
+bool mgos_core_fs_init(void) {
+  const char *dev_name = STM32_ROOT_DEV_NAME;
+  const char *fs_type = CS_STRINGIFY_MACRO(MGOS_ROOT_FS_TYPE);
+  const char *fs_opts = CS_STRINGIFY_MACRO(MGOS_ROOT_FS_OPTS);
+  return (stm32_fs_create_if_needed(dev_name, fs_type, fs_opts) &&
+          mgos_vfs_mount_dev_name("/", dev_name, fs_type, fs_opts));
 }
 
 bool mgos_vfs_common_init(void) {
