@@ -173,7 +173,7 @@ static char *next_field(char **stringp, const char *delim) {
   if (p != NULL) {
     *stringp = NULL;
     for (; *p != '\0' && *stringp == NULL; p++) {
-      while (strchr(delim, *p) != NULL) {
+      while (*p != '\0' && strchr(delim, *p) != NULL) {
         *p = '\0';
         *stringp = ++p;
       }
@@ -202,7 +202,8 @@ bool mgos_process_devtab(const char *dt) {
   bool res = true;
   char *dtc = strdup(dt), *s = dtc, *e;
   while (res && (e = next_field(&s, "|\r\n")) != NULL) {
-    struct mg_str es = mg_strstrip(mg_mk_str(e));
+    struct mg_str ss = mg_mk_str(e);
+    struct mg_str es = mg_strstrip(ss);
     *((char *) es.p + es.len) = '\0';
     if (es.len == 0 || *es.p == '#') continue;
     res = mgos_process_devtab_entry((char *) es.p);
