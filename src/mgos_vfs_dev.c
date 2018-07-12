@@ -35,12 +35,6 @@ static SLIST_HEAD(s_devs, mgos_vfs_dev) s_devs = SLIST_HEAD_INITIALIZER(s_devs);
 
 bool mgos_vfs_dev_register_type(const char *type,
                                 const struct mgos_vfs_dev_ops *ops) {
-  if (ops->open == NULL || ops->read == NULL || ops->write == NULL ||
-      ops->erase == NULL || ops->get_size == NULL || ops->close == NULL) {
-    /* All methods must be implemented, even if with dummy functions. */
-    LOG(LL_ERROR, ("%s: not all methods are implemented", type));
-    abort();
-  }
   struct mgos_vfs_dev_type_entry *dte =
       (struct mgos_vfs_dev_type_entry *) calloc(1, sizeof(*dte));
   if (dte == NULL) return false;
@@ -195,6 +189,7 @@ static bool mgos_process_devtab_entry(char *e) {
   if (opts == NULL) opts = "";
   res = mgos_vfs_dev_create_and_register(type, opts, name);
 out:
+  (void) e_orig;
   return res;
 }
 
