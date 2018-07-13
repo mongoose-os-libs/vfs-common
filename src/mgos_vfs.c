@@ -260,9 +260,9 @@ out:
     if (*p == DIRSEP) p++;
     while (*p != '\0') *real_path++ = *p++;
     *real_path = '\0';
-  } else {
-    free(real_path);
+    real_path = NULL;
   }
+  free(real_path);
   return me;
 }
 
@@ -566,7 +566,7 @@ out:
   mgos_vfs_unlock();
   LOG(LL_DEBUG, ("%s => %p %s => %d", path, fs, (fs_path ? fs_path : ""), ret));
   free(fs_path);
-  return ret;
+  return (ret == 0 ? 0 : -1);
 }
 #if MGOS_VFS_DEFINE_LIBC_API
 int unlink(const char *path) {
@@ -604,7 +604,7 @@ out:
                  (fs_src ? fs_src : ""), (fs_dst ? fs_dst : ""), ret));
   free(fs_src);
   free(fs_dst);
-  return ret;
+  return (ret == 0 ? 0 : -1);
 }
 #if MGOS_VFS_DEFINE_LIBC_API
 int rename(const char *src, const char *dst) {
@@ -955,10 +955,8 @@ static bool mgos_vfs_umount_entry(struct mgos_vfs_mount_entry *me, bool force) {
   SLIST_REMOVE(&s_mounts, me, mgos_vfs_mount_entry, next);
   ret = me->fs->ops->umount(me->fs);
   if (ret) {
-    if (me->fs->dev != NULL) {
-      mgos_vfs_dev_close(me->fs->dev);
-    }
-    memset(me, 0, sizeof(*me));
+    mgos_vfs_dev_close(me->fs->dev);
+    free(me->prefix);
     free(me->fs);
     free(me);
   }
