@@ -12,6 +12,8 @@
 
 #include "common/queue.h"
 
+#include "mgos_system.h"
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -20,6 +22,7 @@ struct mgos_vfs_dev {
   const struct mgos_vfs_dev_ops *ops;
   char *name;
   void *dev_data;
+  struct mgos_rlock_type *lock;
   int refs;
   SLIST_ENTRY(mgos_vfs_dev) next;
 };
@@ -71,9 +74,6 @@ bool mgos_vfs_dev_create_and_register(const char *type, const char *opts,
  */
 bool mgos_vfs_dev_register(struct mgos_vfs_dev *dev, const char *name);
 
-/* Open a previously registered device. */
-struct mgos_vfs_dev *mgos_vfs_dev_open(const char *name);
-
 /*
  * Unregister a previously registered device.
  * This drops a reference added when registering but the device may not be
@@ -82,6 +82,21 @@ struct mgos_vfs_dev *mgos_vfs_dev_open(const char *name);
  * If name is NULL or empty, does nothing (successfully).
  */
 bool mgos_vfs_dev_unregister(const char *name);
+
+/* Open a previously registered device. */
+struct mgos_vfs_dev *mgos_vfs_dev_open(const char *name);
+
+enum mgos_vfs_dev_err mgos_vfs_dev_read(struct mgos_vfs_dev *dev, size_t offset,
+                                        size_t len, void *dst);
+
+enum mgos_vfs_dev_err mgos_vfs_dev_write(struct mgos_vfs_dev *dev,
+                                         size_t offset, size_t len,
+                                         const void *src);
+
+enum mgos_vfs_dev_err mgos_vfs_dev_erase(struct mgos_vfs_dev *dev,
+                                         size_t offset, size_t len);
+
+size_t mgos_vfs_dev_get_size(struct mgos_vfs_dev *dev);
 
 /* Close a previously opened or created device. */
 bool mgos_vfs_dev_close(struct mgos_vfs_dev *dev);

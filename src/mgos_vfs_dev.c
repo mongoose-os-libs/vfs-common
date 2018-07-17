@@ -55,9 +55,11 @@ static struct mgos_vfs_dev *mgos_vfs_dev_create_int(const char *type,
       dev = (struct mgos_vfs_dev *) calloc(1, sizeof(*dev));
       dev->ops = dte->ops;
       dev->refs = 1;
+      dev->lock = mgos_rlock_create();
       enum mgos_vfs_dev_err dres = dev->ops->open(dev, opts);
       if (dres != 0) {
         LOG(LL_ERROR, ("Dev %s %s open failed: %d", type, opts, dres));
+        mgos_rlock_destroy(dev->lock);
         free(dev);
         dev = NULL;
       } else {
@@ -77,6 +79,14 @@ struct mgos_vfs_dev *mgos_vfs_dev_create(const char *type, const char *opts) {
   return mgos_vfs_dev_create_int(type, opts, NULL);
 }
 
+static inline void dev_lock(struct mgos_vfs_dev *dev) {
+  mgos_rlock(dev->lock);
+}
+
+static inline void dev_unlock(struct mgos_vfs_dev *dev) {
+  mgos_runlock(dev->lock);
+}
+
 bool mgos_vfs_dev_register(struct mgos_vfs_dev *dev, const char *name) {
   if (dev == NULL || name == NULL || name[0] == '\0') return false;
   struct mgos_vfs_dev *d;
@@ -86,8 +96,10 @@ bool mgos_vfs_dev_register(struct mgos_vfs_dev *dev, const char *name) {
       return false;
     }
   }
+  dev_lock(dev);
   dev->name = strdup(name);
   dev->refs++;
+  dev_unlock(dev);
   SLIST_INSERT_HEAD(&s_devs, dev, next);
   return true;
 }
@@ -106,28 +118,71 @@ static struct mgos_vfs_dev *find_dev(const char *name) {
   struct mgos_vfs_dev *dev;
   if (name == NULL) return false;
   SLIST_FOREACH(dev, &s_devs, next) {
-    if (strcmp(dev->name, name) == 0) break;
+    dev_lock(dev);
+    if (strcmp(dev->name, name) == 0) {
+      dev->refs++;
+      dev_unlock(dev);
+      break;
+    }
+    dev_unlock(dev);
   }
   return dev;
 }
 
 struct mgos_vfs_dev *mgos_vfs_dev_open(const char *name) {
   struct mgos_vfs_dev *dev = find_dev(name);
-  if (dev != NULL) {
-    dev->refs++;
-  } else {
+  if (dev == NULL) {
     LOG(LL_ERROR, ("No such device %s", name));
   }
   return dev;
 }
 
+enum mgos_vfs_dev_err mgos_vfs_dev_read(struct mgos_vfs_dev *dev, size_t offset,
+                                        size_t len, void *dst) {
+  if (dev == NULL) return MGOS_VFS_DEV_ERR_INVAL;
+  dev_lock(dev);
+  enum mgos_vfs_dev_err res = dev->ops->read(dev, offset, len, dst);
+  dev_unlock(dev);
+  return res;
+}
+
+enum mgos_vfs_dev_err mgos_vfs_dev_write(struct mgos_vfs_dev *dev,
+                                         size_t offset, size_t len,
+                                         const void *src) {
+  if (dev == NULL) return MGOS_VFS_DEV_ERR_INVAL;
+  dev_lock(dev);
+  enum mgos_vfs_dev_err res = dev->ops->write(dev, offset, len, src);
+  dev_unlock(dev);
+  return res;
+}
+
+enum mgos_vfs_dev_err mgos_vfs_dev_erase(struct mgos_vfs_dev *dev,
+                                         size_t offset, size_t len) {
+  if (dev == NULL) return MGOS_VFS_DEV_ERR_INVAL;
+  dev_lock(dev);
+  enum mgos_vfs_dev_err res = dev->ops->erase(dev, offset, len);
+  dev_unlock(dev);
+  return res;
+}
+
+size_t mgos_vfs_dev_get_size(struct mgos_vfs_dev *dev) {
+  if (dev == NULL) return 0;
+  dev_lock(dev);
+  size_t res = dev->ops->get_size(dev);
+  dev_unlock(dev);
+  return res;
+}
+
 bool mgos_vfs_dev_close(struct mgos_vfs_dev *dev) {
   bool ret = false;
   if (dev == NULL) goto out;
+  dev_lock(dev);
   dev->refs--;
+  dev_unlock(dev);
   LOG(LL_DEBUG, ("%s refs %d", (dev->name ? dev->name : ""), dev->refs));
   if (dev->refs == 0) {
     ret = (dev->ops->close(dev) == MGOS_VFS_DEV_ERR_NONE);
+    mgos_rlock_destroy(dev->lock);
     memset(dev, 0, sizeof(*dev));
     free(dev);
   }
@@ -138,6 +193,8 @@ out:
 bool mgos_vfs_dev_unregister(const char *name) {
   struct mgos_vfs_dev *dev = find_dev(name);
   if (dev == NULL) return false;
+  dev_lock(dev);
+  dev->refs--;
   if (dev->name != NULL) {
     /* This dev is still alive, just remove the name. */
     SLIST_REMOVE(&s_devs, dev, mgos_vfs_dev, next);
@@ -147,6 +204,7 @@ bool mgos_vfs_dev_unregister(const char *name) {
     if (f) dev->name = NULL;
     free(name);
   }
+  dev_unlock(dev);
   return true;
 }
 
