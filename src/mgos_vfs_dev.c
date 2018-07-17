@@ -56,7 +56,8 @@ static struct mgos_vfs_dev *mgos_vfs_dev_create_int(const char *type,
       dev->ops = dte->ops;
       dev->refs = 1;
       dev->lock = mgos_rlock_create();
-      enum mgos_vfs_dev_err dres = dev->ops->open(dev, opts);
+      enum mgos_vfs_dev_err dres = MGOS_VFS_DEV_ERR_NONE;
+      if (dev->ops->open != NULL) dres = dev->ops->open(dev, opts);
       if (dres != 0) {
         LOG(LL_ERROR, ("Dev %s %s open failed: %d", type, opts, dres));
         mgos_rlock_destroy(dev->lock);
