@@ -19,11 +19,17 @@
 
 #include <stdbool.h>
 
+#include "mgos_vfs_dev.h"
+
 #ifdef __cplusplus
 extern "C" {
 #endif
 
 #define MGOS_VFS_DEV_TYPE_STM32_FLASH "stm32flash"
+
+enum mgos_vfs_dev_err stm32_flash_dev_init(struct mgos_vfs_dev *dev,
+                                           size_t offset, size_t size,
+                                           bool emulate_small_erase);
 
 bool stm32_vfs_dev_flash_register_type(void);
 
