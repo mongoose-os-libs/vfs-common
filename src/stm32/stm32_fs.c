@@ -22,6 +22,7 @@
 
 #include "miniz.h"
 
+#include "mgos_boot_cfg.h"
 #include "mgos_hal.h"
 #include "mgos_vfs.h"
 #include "mgos_vfs_internal.h"
@@ -36,10 +37,6 @@
 #if MGOS_ROOT_FS_EXTRACT
 extern const unsigned char fs_zip[];
 extern unsigned int fs_zip_len;
-
-/* Note: This a mutable flag on flash. It's a super-cheesy way of doing it,
- * but it'll do until OTA and hopefully a better way comes along. */
-const uint8_t f_fs_created = 0xff;
 
 static bool stm32_fs_extract(void) {
   bool res = false;
@@ -94,20 +91,38 @@ out:
   return res;
 }
 
+/* Note: This a mutable flag on flash. It's a super-cheesy way of doing it,
+ * but it'll in a pinch (when we don't have a boot loader). */
+const uint8_t f_fs_created = 0xff;
+
 bool stm32_fs_create_if_needed(const char *dev_name, const char *fs_type,
                                const char *fs_opts) {
   bool res = false;
-  /* Volatile to prevent compiler optimizations. */
-  volatile const uint8_t *fp = &f_fs_created;
-  int offset = (intptr_t)(((uint8_t *) &f_fs_created) - FLASH_BASE);
-  if (*fp != 0) {
-    res = stm32_fs_create(dev_name, fs_type, fs_opts);
-    if (res) {
-      uint8_t val = 0;
-      res = stm32_flash_write_region(offset, 1, &val);
+  struct mgos_boot_cfg *bcfg = mgos_boot_cfg_get();
+  if (bcfg == NULL) {
+    /* Volatile to prevent compiler optimizations. */
+    volatile const uint8_t *fp = &f_fs_created;
+    int offset = (intptr_t)(((uint8_t *) &f_fs_created) - FLASH_BASE);
+    if (*fp != 0) {
+      res = stm32_fs_create(dev_name, fs_type, fs_opts);
+      if (res) {
+        uint8_t val = 0;
+        res = stm32_flash_write_region(offset, 1, &val);
+      }
+    } else {
+      res = true;
     }
   } else {
-    res = true;
+    struct mgos_boot_slot_state *ss = &bcfg->slots[bcfg->active_slot].state;
+    if (!(ss->app_flags & MGOS_BOOT_APP_F_FS_CREATED)) {
+      res = stm32_fs_create(dev_name, fs_type, fs_opts);
+      if (res) {
+        ss->app_flags |= MGOS_BOOT_APP_F_FS_CREATED;
+        res = mgos_boot_cfg_write(bcfg, true /* dump */);
+      }
+    } else {
+      res = true;
+    }
   }
   return res;
 }
@@ -125,6 +140,10 @@ bool mgos_core_fs_init(void) {
   const char *dev_name = STM32_ROOT_DEV_NAME;
   const char *fs_type = CS_STRINGIFY_MACRO(MGOS_ROOT_FS_TYPE);
   const char *fs_opts = CS_STRINGIFY_MACRO(MGOS_ROOT_FS_OPTS);
+  struct mgos_boot_cfg *bcfg = mgos_boot_cfg_get();
+  if (bcfg != NULL) {
+    dev_name = bcfg->slots[bcfg->active_slot].cfg.fs_dev;
+  }
   return (stm32_fs_create_if_needed(dev_name, fs_type, fs_opts) &&
           mgos_vfs_mount_dev_name("/", dev_name, fs_type, fs_opts));
 }

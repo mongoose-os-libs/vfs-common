@@ -131,7 +131,7 @@ static enum mgos_vfs_dev_err stm32_vfs_dev_flash_erase(struct mgos_vfs_dev *dev,
   int sector = stm32_flash_get_sector(abs_offset);
   if (sector < 0) goto out;
   int sector_offset = stm32_flash_get_sector_offset(sector);
-  int sector_size = stm32_flash_get_sector_size(sector);
+  size_t sector_size = stm32_flash_get_sector_size(sector);
   if (abs_offset == sector_offset && len == sector_size) {
     if (stm32_flash_sector_is_erased(sector)) goto out_ok;
     if (!stm32_flash_erase_sector(sector)) {
@@ -192,7 +192,7 @@ static enum mgos_vfs_dev_err stm32_vfs_dev_flash_close(
 }
 
 static const struct mgos_vfs_dev_ops stm32_vfs_dev_flash_ops = {
-#ifndef MGOS_NO_MAIN
+#ifndef MGOS_BOOT_BUILD
     .open = stm32_vfs_dev_flash_open,
 #endif
     .read = stm32_vfs_dev_flash_read,

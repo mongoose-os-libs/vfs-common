@@ -133,7 +133,7 @@ static struct mgos_vfs_dev *find_dev(const char *name) {
 struct mgos_vfs_dev *mgos_vfs_dev_open(const char *name) {
   struct mgos_vfs_dev *dev = find_dev(name);
   if (dev == NULL) {
-    LOG(LL_ERROR, ("No such device %s", name));
+    LOG(LL_ERROR, ("No such device '%s'", name));
   }
   return dev;
 }
