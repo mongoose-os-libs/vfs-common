@@ -591,7 +591,6 @@ int mgos_vfs_rename(const char *src, const char *dst) {
     errno = ENODEV;
     goto out;
   } else if (me != me_dst) {
-    me_dst->fs->refs--;
     errno = EXDEV;
     goto out;
   }
@@ -599,6 +598,7 @@ int mgos_vfs_rename(const char *src, const char *dst) {
   ret = fs->ops->rename(fs, fs_src, fs_dst);
 out:
   if (me != NULL) me->fs->refs--;
+  if (me_dst != NULL) me_dst->fs->refs--;
   mgos_vfs_unlock();
   LOG(LL_DEBUG, ("%s -> %s => %p %s -> %s => %d", src, dst, fs,
                  (fs_src ? fs_src : ""), (fs_dst ? fs_dst : ""), ret));
