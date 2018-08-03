@@ -34,8 +34,8 @@
 
 #include "stm32_flash.h"
 
-/* Note: FLASH_BASE_ADDR and FLASH_SIZE are defined externally. */
-#if FLASH_BASE_ADDR != FLASH_BASE
+/* Note: STM32_FLASH_BASE_ADDR is defined externally. */
+#if STM32_FLASH_BASE_ADDR != FLASH_BASE
 #error "FLASH_BASE used by compiler and linker do not match"
 #endif
 
