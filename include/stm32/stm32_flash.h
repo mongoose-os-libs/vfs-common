@@ -44,6 +44,16 @@ bool stm32_flash_region_is_erased(int offset, int len);
 /* Verify that a sector is erased */
 bool stm32_flash_sector_is_erased(int sector);
 
+#ifdef STM32L4
+#define FLASH_ERR_FLAGS                                        \
+  (FLASH_FLAG_OPERR | FLASH_FLAG_PROGERR | FLASH_FLAG_WRPERR | \
+   FLASH_FLAG_PGAERR | FLASH_FLAG_SIZERR | FLASH_FLAG_PGSERR | \
+   FLASH_FLAG_MISERR | FLASH_FLAG_FASTERR)
+#else
+#define FLASH_ERR_FLAGS \
+  (FLASH_FLAG_OPERR | FLASH_FLAG_WRPERR | FLASH_FLAG_PGAERR | FLASH_FLAG_PGPERR)
+#endif
+
 #ifdef __cplusplus
 }
 #endif

@@ -65,9 +65,9 @@ enum mgos_vfs_dev_err stm32_flash_dev_init(struct mgos_vfs_dev *dev,
   dd->size = size;
   dd->emulate_small_erase = emulate_small_erase;
   if (!check_bounds(dd, 0, 0)) {
-    LOG(LL_INFO, ("Invalid settings: %lu %lu (flash size: %luK)",
-                  (unsigned long) dd->offset, (unsigned long) dd->size,
-                  (unsigned long) LL_GetFlashSize()));
+    LOG(LL_ERROR, ("Invalid settings: %lu %lu (flash size: %luK)",
+                   (unsigned long) dd->offset, (unsigned long) dd->size,
+                   (unsigned long) LL_GetFlashSize()));
     goto out;
   }
   dev->dev_data = dd;
@@ -79,7 +79,7 @@ out:
 
 enum mgos_vfs_dev_err stm32_vfs_dev_flash_open(struct mgos_vfs_dev *dev,
                                                const char *opts) {
-  unsigned long offset = 0, size = LL_GetFlashSize();
+  unsigned long offset = 0, size = LL_GetFlashSize() * 1024;
   int emulate_small_erase = false;
   if (opts != NULL) {
     json_scanf(opts, strlen(opts), "{offset: %lu, size: %lu, ese: %B}", &offset,
@@ -124,53 +124,59 @@ static enum mgos_vfs_dev_err stm32_vfs_dev_flash_erase(struct mgos_vfs_dev *dev,
                                                        size_t offset,
                                                        size_t len) {
   enum mgos_vfs_dev_err res = MGOS_VFS_DEV_ERR_INVAL;
+  size_t off = offset, l = len;
   uint8_t *tmp = NULL;
   const struct dev_data *dd = (struct dev_data *) dev->dev_data;
   if (!check_bounds(dd, offset, len)) goto out;
-  int abs_offset = dd->offset + offset;
-  int sector = stm32_flash_get_sector(abs_offset);
-  if (sector < 0) goto out;
-  int sector_offset = stm32_flash_get_sector_offset(sector);
-  size_t sector_size = stm32_flash_get_sector_size(sector);
-  if (abs_offset == sector_offset && len == sector_size) {
-    if (stm32_flash_sector_is_erased(sector)) goto out_ok;
-    if (!stm32_flash_erase_sector(sector)) {
+  while (l > 0) {
+    size_t abs_offset = dd->offset + off;
+    int sector = stm32_flash_get_sector(abs_offset);
+    if (sector < 0) goto out;
+    size_t sector_offset = stm32_flash_get_sector_offset(sector);
+    size_t sector_size = stm32_flash_get_sector_size(sector);
+    if (abs_offset == sector_offset && len >= sector_size) {
+      if (stm32_flash_sector_is_erased(sector)) goto out_ok;
+      if (!stm32_flash_erase_sector(sector)) {
+        res = MGOS_VFS_DEV_ERR_IO;
+        goto out;
+      }
+      l -= sector_size;
+    } else if (dd->emulate_small_erase && abs_offset >= sector_offset &&
+               abs_offset + l <= sector_offset + sector_size) {
+      if (stm32_flash_region_is_erased(abs_offset, l)) goto out_ok;
+      LOG(LL_WARN, ("Unsafe flash erase: %u @ 0x%x", l, abs_offset));
+      tmp = malloc(sector_size);
+      if (tmp == NULL) {
+        res = MGOS_VFS_DEV_ERR_NOMEM;
+        goto out;
+      }
+      int before_len = abs_offset - sector_offset;
+      int after_offset = before_len + l;
+      int after_len = sector_size - after_offset;
+      memcpy(tmp, (const uint8_t *) (FLASH_BASE + sector_offset), sector_size);
       res = MGOS_VFS_DEV_ERR_IO;
-      goto out;
-    }
-  } else if (dd->emulate_small_erase && abs_offset >= sector_offset &&
-             abs_offset + len <= sector_offset + sector_size) {
-    if (stm32_flash_region_is_erased(abs_offset, len)) goto out_ok;
-    LOG(LL_WARN, ("Unsafe flash erase: %u @ 0x%x", len, abs_offset));
-    tmp = malloc(sector_size);
-    if (tmp == NULL) {
-      res = MGOS_VFS_DEV_ERR_NOMEM;
-      goto out;
-    }
-    int before_len = abs_offset - sector_offset;
-    int after_offset = before_len + len;
-    int after_len = sector_size - after_offset;
-    memcpy(tmp, (const uint8_t *) (FLASH_BASE + sector_offset), sector_size);
-    res = MGOS_VFS_DEV_ERR_IO;
-    if (!stm32_flash_erase_sector(sector)) {
-      goto out;
-    }
-    if (before_len > 0) {
-      if (!stm32_flash_write_region(sector_offset, before_len, tmp)) {
+      if (!stm32_flash_erase_sector(sector)) {
         goto out;
       }
-    }
-    if (after_len > 0) {
-      if (!stm32_flash_write_region(sector_offset + after_offset, after_len,
-                                    tmp + after_offset)) {
-        goto out;
+      if (before_len > 0) {
+        if (!stm32_flash_write_region(sector_offset, before_len, tmp)) {
+          goto out;
+        }
       }
+      if (after_len > 0) {
+        if (!stm32_flash_write_region(sector_offset + after_offset, after_len,
+                                      tmp + after_offset)) {
+          goto out;
+        }
+      }
+      free(tmp);
+      l = 0;
+    } else {
+      /* Cross-sector operations are not supported. */
+      res = MGOS_VFS_DEV_ERR_INVAL;
+      goto out;
     }
-    free(tmp);
-  } else {
-    /* Cross-sector operations are not supported. */
-    res = MGOS_VFS_DEV_ERR_INVAL;
-    goto out;
+    off += sector_size;
   }
 out_ok:
   res = MGOS_VFS_DEV_ERR_NONE;
@@ -192,9 +198,7 @@ static enum mgos_vfs_dev_err stm32_vfs_dev_flash_close(
 }
 
 static const struct mgos_vfs_dev_ops stm32_vfs_dev_flash_ops = {
-#ifndef MGOS_BOOT_BUILD
     .open = stm32_vfs_dev_flash_open,
-#endif
     .read = stm32_vfs_dev_flash_read,
     .write = stm32_vfs_dev_flash_write,
     .erase = stm32_vfs_dev_flash_erase,

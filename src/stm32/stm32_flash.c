@@ -18,154 +18,47 @@
 #include "stm32_flash.h"
 
 #include "common/cs_dbg.h"
-#include "common/str_util.h"
 
-#include "mongoose.h"
 #include "mgos_system.h"
 
 #include "stm32_sdk_hal.h"
 #include "stm32_system.h"
 
-#ifdef FLASH_FLAG_PGSERR
-#ifndef FLASH_FLAG_PGPERR
-#define FLASH_FLAG_PGPERR FLASH_FLAG_PROGERR
-#endif
-#define FLASH_ERR_FLAGS                                       \
-  (FLASH_FLAG_OPERR | FLASH_FLAG_WRPERR | FLASH_FLAG_PGAERR | \
-   FLASH_FLAG_PGPERR | FLASH_FLAG_PGSERR)
-#endif
-#ifdef FLASH_FLAG_ERSERR
-#define FLASH_ERR_FLAGS                                       \
-  (FLASH_FLAG_OPERR | FLASH_FLAG_WRPERR | FLASH_FLAG_PGAERR | \
-   FLASH_FLAG_PGPERR | FLASH_FLAG_ERSERR)
+#if 0
+#include "mgos_boot_dbg.h"
+#undef LOG
+#define LOG(x, y) mgos_boot_dbg_printf y
 #endif
 
-/* L4 doesn't have this flag */
-#ifndef FLASH_PSIZE_BYTE
-#define FLASH_PSIZE_BYTE (0)
-#endif
-
-#if defined(STM32F4) || defined(STM32F7)
-static const int s_stm32f_flash_layout[FLASH_SECTOR_TOTAL] = {
-#if defined(STM32F4)
-#if STM32_FLASH_SIZE == 524288
-    16384,  16384,  16384, 16384, 65536,
-    131072, 131072, 131072
-#elif STM32_FLASH_SIZE == 1048576
-    16384,  16384,  16384,  16384,  65536, 131072, 131072,
-    131072, 131072, 131072, 131072, 131072
-#elif STM32_FLASH_SIZE == 1572864
-    16384,  16384,  16384,  16384,  65536,  131072, 131072, 131072, 131072,
-    131072, 131072, 131072, 131072, 131072, 131072, 131072
-#elif STM32_FLASH_SIZE == 2097152 /* dual-bank */
-    16384,  16384,  16384,  16384,  65536,  131072, 131072, 131072, 131072,
-    131072, 131072, 131072, 16384,  16384,  16384,  16384,  65536,  131072,
-    131072, 131072, 131072, 131072, 131072, 131072
-#else
-#error Unsupported flash size
-#endif
-#else
-#if STM32_FLASH_SIZE == 1048576
-    32768,  32768,  32768, 32768, 131072,
-    262144, 262144, 262144
-#else
-#error Unsupported flash size
-#endif
-#endif
-};
-#elif defined(STM32L4)
-#else
-#error Unknown defice family
-#endif
-
-#if !defined(STM32L4)
-int stm32_flash_get_sector(int offset) {
-  int sector = -1, sector_end = 0;
-  do {
-    sector++;
-    if (s_stm32f_flash_layout[sector] == 0) return -1;
-    sector_end += s_stm32f_flash_layout[sector];
-  } while (sector_end <= offset);
-  return sector;
-}
-
-int stm32_flash_get_sector_offset(int sector) {
-  int sector_offset = 0;
-  while (sector > 0) {
-    sector--;
-    sector_offset += s_stm32f_flash_layout[sector];
-  }
-  return sector_offset;
-}
-
-int stm32_flash_get_sector_size(int sector) {
-  return s_stm32f_flash_layout[sector];
-}
-#else
-
-int stm32_flash_get_sector(int offset) {
-  return offset / FLASH_PAGE_SIZE;
-}
-
-int stm32_flash_get_sector_offset(int sector) {
-  return sector * FLASH_PAGE_SIZE;
-}
-
-int stm32_flash_get_sector_size(int sector) {
-  return FLASH_PAGE_SIZE;
-}
-#endif
-
-IRAM bool stm32_flash_write_region(int offset, int len, const void *src) {
-  bool res = false;
-  if (offset < 0 || len < 0 || offset + len > STM32_FLASH_SIZE) goto out;
-  volatile uint8_t *dst = (uint8_t *) (FLASH_BASE + offset), *p = dst;
-  const uint8_t *q = (const uint8_t *) src;
-  HAL_FLASH_Unlock();
-  __HAL_FLASH_CLEAR_FLAG(FLASH_ERR_FLAGS);
-  res = true;
-  for (int i = 0; i < len && res; i++, p++, q++) {
-    mgos_ints_disable();
-    while (__HAL_FLASH_GET_FLAG(FLASH_FLAG_BSY) != 0) {
-    }
-    FLASH->CR = FLASH_PSIZE_BYTE | FLASH_CR_PG;
-    __DSB();
-    *p = *q;
-    __DSB();
-    while (__HAL_FLASH_GET_FLAG(FLASH_FLAG_BSY) != 0) {
-    }
-    mgos_ints_enable();
-    res = (__HAL_FLASH_GET_FLAG(FLASH_ERR_FLAGS) == 0);
-    CLEAR_BIT(FLASH->CR, FLASH_CR_PG);
-  }
-  stm32_flush_caches();
-  res = (memcmp(src, (const void *) dst, len) == 0);
-  HAL_FLASH_Lock();
-out:
-  return res;
-}
-
-IRAM bool stm32_flash_erase_sector(int sector) {
-  bool res = false;
-  int offset = stm32_flash_get_sector_offset(sector);
-  if (offset < 0) goto out;
-  HAL_FLASH_Unlock();
-#ifdef FLASH_CR_SER
-  FLASH->CR = FLASH_PSIZE_BYTE | FLASH_CR_SER | (sector << FLASH_CR_SNB_Pos);
-#else
-  uint32_t pnb = (sector & 0xff);
-  FLASH->CR = (FLASH_CR_PER | (sector > 0xff ? FLASH_CR_BKER : 0) |
-               (pnb << FLASH_CR_PNB_Pos));
-#endif
-  __HAL_FLASH_CLEAR_FLAG(FLASH_ERR_FLAGS);
+IRAM void stm32_flash_do_erase(void) {
   mgos_ints_disable();
+  stm32_flush_caches();
   FLASH->CR |= FLASH_CR_STRT;
   __DSB();
   while (__HAL_FLASH_GET_FLAG(FLASH_FLAG_BSY) != 0) {
   }
-  mgos_ints_enable();
-  HAL_FLASH_Lock();
   stm32_flush_caches();
+  mgos_ints_enable();
+}
+
+bool stm32_flash_erase_sector(int sector) {
+  bool res = false;
+  int offset = stm32_flash_get_sector_offset(sector);
+  if (offset < 0) goto out;
+  HAL_FLASH_Unlock();
+#ifdef STM32L4
+  uint32_t pnb = (sector & 0xff);
+  FLASH->CR = (FLASH_CR_PER | (sector > 0xff ? FLASH_CR_BKER : 0) |
+               (pnb << FLASH_CR_PNB_Pos));
+#else
+  FLASH->CR = FLASH_PSIZE_BYTE | FLASH_CR_SER | (sector << FLASH_CR_SNB_Pos);
+#endif
+  __HAL_FLASH_CLEAR_FLAG(FLASH_ERR_FLAGS);
+  stm32_flash_do_erase();
+  HAL_FLASH_Lock();
+  if ((FLASH->SR & FLASH_ERR_FLAGS) != 0) {
+    LOG(LL_ERROR, ("Flash %s error, flags: 0x%lx", "erase", FLASH->SR));
+  }
   res = stm32_flash_sector_is_erased(sector);
 out:
   return res;
