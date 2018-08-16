@@ -35,7 +35,6 @@
 #endif /* CS_MMAP */
 
 #define MAKE_VFD(mount_id, fs_fd) (((mount_id) << 8) | ((fs_fd) &0xff))
-#define MOUNT_ID_FROM_VFD(fd) (((fd) >> 8) & 0xff)
 
 struct mgos_vfs_fs_type_entry {
   const char *type;

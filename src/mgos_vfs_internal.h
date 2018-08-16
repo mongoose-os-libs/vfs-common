@@ -16,6 +16,8 @@ void mgos_vfs_mmap_init(void);
 
 void mgos_vfs_print_fs_info(const char *path);
 
+#define MOUNT_ID_FROM_VFD(fd) (((fd) >> 8) & 0xff)
+
 #ifdef __cplusplus
 }
 #endif
