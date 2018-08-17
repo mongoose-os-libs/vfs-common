@@ -112,7 +112,7 @@ bool mgos_vfs_dev_register(struct mgos_vfs_dev *dev, const char *name) {
 bool mgos_vfs_dev_create_and_register(const char *type, const char *opts,
                                       const char *name) {
   if (name == NULL) return false;
-#ifdef MGOS_BOOT_BUILD
+#if defined(MGOS_BOOT_BUILD) && defined(MGOS_BOOT_DEBUG)
   mgos_boot_dbg_printf("%s %s %s\n", name, type, opts);
 #endif
   struct mgos_vfs_dev *dev = mgos_vfs_dev_create_int(type, opts, name);

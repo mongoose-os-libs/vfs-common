@@ -27,7 +27,9 @@
 #if 0
 #include "mgos_boot_dbg.h"
 #undef LOG
-#define LOG(x, y) mgos_boot_dbg_printf y
+#define LOG(x, y)         \
+  mgos_boot_dbg_printf y; \
+  mgos_boot_dbg_putc('\n')
 #endif
 
 IRAM void stm32_flash_do_erase(void) {
