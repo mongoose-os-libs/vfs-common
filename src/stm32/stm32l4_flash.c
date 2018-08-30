@@ -31,6 +31,14 @@
 #define STM32L4_FLASH_WRITE_SIZE 8
 #define STM32L4_FLASH_WRITE_ALIGN 8
 
+#if 0
+#include "mgos_boot_dbg.h"
+#undef LOG
+#define LOG(x, y)         \
+  mgos_boot_dbg_printf y; \
+  mgos_boot_dbg_putc('\n')
+#endif
+
 int stm32_flash_get_sector(int offset) {
   return offset / FLASH_PAGE_SIZE;
 }
@@ -48,8 +56,9 @@ IRAM bool stm32_flash_write_region(int offset, int len, const void *src) {
   if (offset < 0 || len < 0 || offset + len > STM32_FLASH_SIZE) goto out;
   /* We do not support unaligned writes at the moment. */
   if (offset % STM32L4_FLASH_WRITE_ALIGN != 0 ||
-      len % STM32L4_FLASH_WRITE_SIZE != 0)
+      len % STM32L4_FLASH_WRITE_SIZE != 0) {
     goto out;
+  }
   volatile uint32_t *dst = (uint32_t *) (FLASH_BASE + offset), *p = dst;
   const uint32_t *q = (const uint32_t *) src;
   HAL_FLASH_Unlock();
@@ -67,8 +76,7 @@ IRAM bool stm32_flash_write_region(int offset, int len, const void *src) {
     __DSB();
     while (__HAL_FLASH_GET_FLAG(FLASH_FLAG_BSY) != 0) {
     }
-    res = (__HAL_FLASH_GET_FLAG(FLASH_ERR_FLAGS) == 0);
-    if (!res) {
+    if ((FLASH->SR & FLASH_ERR_FLAGS) != 0) {
       LOG(LL_ERROR, ("Flash %s error, flags: 0x%lx", "prog", FLASH->SR));
       break;
     }
@@ -77,8 +85,9 @@ IRAM bool stm32_flash_write_region(int offset, int len, const void *src) {
   mgos_ints_enable();
   if (res) {
     res = (memcmp(src, (const void *) dst, len) == 0);
-    if (!res)
+    if (!res) {
       LOG(LL_ERROR, ("Flash %s error, flags: 0x%lx", "verify", FLASH->SR));
+    }
   }
   HAL_FLASH_Lock();
 out:
