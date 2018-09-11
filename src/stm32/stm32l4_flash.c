@@ -48,6 +48,7 @@ int stm32_flash_get_sector_offset(int sector) {
 }
 
 int stm32_flash_get_sector_size(int sector) {
+  (void) sector;
   return FLASH_PAGE_SIZE;
 }
 

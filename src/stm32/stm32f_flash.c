@@ -107,8 +107,9 @@ IRAM bool stm32_flash_write_region(int offset, int len, const void *src) {
   mgos_ints_enable();
   if (res) {
     res = (memcmp(src, (const void *) dst, len) == 0);
-    if (!res)
+    if (!res) {
       LOG(LL_ERROR, ("Flash %s error, flags: 0x%lx", "verify", FLASH->SR));
+    }
   }
   HAL_FLASH_Lock();
 out:
