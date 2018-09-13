@@ -18,5 +18,6 @@ tags:
   - c
   - core
   - fs
+  - docs:drivers:VFS
 
 manifest_version: 2018-06-20
