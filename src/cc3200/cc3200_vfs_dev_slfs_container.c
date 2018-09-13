@@ -446,6 +446,14 @@ static enum mgos_vfs_dev_err cc3200_vfs_dev_slfs_container_close(
   return MGOS_VFS_DEV_ERR_NONE;
 }
 
+static enum mgos_vfs_dev_err cc3200_vfs_dev_slfs_container_get_erase_sizes(
+    struct mgos_vfs_dev *dev, size_t sizes[MGOS_VFS_DEV_NUM_ERASE_SIZES]) {
+  sizes[0] = 1;
+  sizes[1] = 4096; /* Arbitrary value, as a suggestion. */
+  (void) dev;
+  return MGOS_VFS_DEV_ERR_NONE;
+}
+
 static const struct mgos_vfs_dev_ops cc3200_vfs_dev_slfs_container_ops = {
     .open = cc3200_vfs_dev_slfs_container_open,
     .read = cc3200_vfs_dev_slfs_container_read,
@@ -453,6 +461,7 @@ static const struct mgos_vfs_dev_ops cc3200_vfs_dev_slfs_container_ops = {
     .erase = cc3200_vfs_dev_slfs_container_erase,
     .get_size = cc3200_vfs_dev_slfs_container_get_size,
     .close = cc3200_vfs_dev_slfs_container_close,
+    .get_erase_sizes = cc3200_vfs_dev_slfs_container_get_erase_sizes,
 };
 
 bool cc3200_vfs_dev_slfs_container_register_type(void) {

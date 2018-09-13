@@ -78,7 +78,8 @@ IRAM bool stm32_flash_write_region(int offset, int len, const void *src) {
     while (__HAL_FLASH_GET_FLAG(FLASH_FLAG_BSY) != 0) {
     }
     if ((FLASH->SR & FLASH_ERR_FLAGS) != 0) {
-      LOG(LL_ERROR, ("Flash %s error, flags: 0x%lx", "prog", FLASH->SR));
+      LOG(LL_ERROR, ("Flash %s error @ %d, flags: 0x%lx", "prog",
+                     (int) offset + i, FLASH->SR));
       break;
     }
   }
@@ -87,11 +88,19 @@ IRAM bool stm32_flash_write_region(int offset, int len, const void *src) {
   if (res) {
     res = (memcmp(src, (const void *) dst, len) == 0);
     if (!res) {
-      LOG(LL_ERROR, ("Flash %s error, flags: 0x%lx", "verify", FLASH->SR));
+      LOG(LL_ERROR, ("Flash %s error @ %d, flags: 0x%lx", "verify",
+                     (int) offset, FLASH->SR));
     }
   }
   HAL_FLASH_Lock();
 out:
   return res;
+}
+
+extern enum mgos_vfs_dev_err stm32_vfs_dev_flash_get_erase_sizes(
+    struct mgos_vfs_dev *dev, size_t sizes[MGOS_VFS_DEV_NUM_ERASE_SIZES]) {
+  sizes[0] = FLASH_PAGE_SIZE;
+  (void) dev;
+  return MGOS_VFS_DEV_ERR_NONE;
 }
 #endif /* defined(STM32L4) */

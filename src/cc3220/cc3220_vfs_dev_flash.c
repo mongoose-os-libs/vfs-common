@@ -292,6 +292,13 @@ static enum mgos_vfs_dev_err cc3220_vfs_dev_flash_close(
   return MGOS_VFS_DEV_ERR_NONE;
 }
 
+static enum mgos_vfs_dev_err cc3220_vfs_dev_flash_get_erase_sizes(
+    struct mgos_vfs_dev *dev, size_t sizes[MGOS_VFS_DEV_NUM_ERASE_SIZES]) {
+  sizes[0] = CC3220_FLASH_SECTOR_SIZE;
+  (void) dev;
+  return MGOS_VFS_DEV_ERR_NONE;
+}
+
 static const struct mgos_vfs_dev_ops cc3220_vfs_dev_flash_ops = {
     .open = cc3220_vfs_dev_flash_open,
     .read = cc3220_vfs_dev_flash_read,
@@ -299,6 +306,7 @@ static const struct mgos_vfs_dev_ops cc3220_vfs_dev_flash_ops = {
     .erase = cc3220_vfs_dev_flash_erase,
     .get_size = cc3220_vfs_dev_flash_get_size,
     .close = cc3220_vfs_dev_flash_close,
+    .get_erase_sizes = cc3220_vfs_dev_flash_get_erase_sizes,
 };
 
 bool cc3220_vfs_dev_flash_register_type(void) {

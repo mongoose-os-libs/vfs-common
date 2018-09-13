@@ -197,6 +197,9 @@ static enum mgos_vfs_dev_err stm32_vfs_dev_flash_close(
   return MGOS_VFS_DEV_ERR_NONE;
 }
 
+extern enum mgos_vfs_dev_err stm32_vfs_dev_flash_get_erase_sizes(
+    struct mgos_vfs_dev *dev, size_t sizes[MGOS_VFS_DEV_NUM_ERASE_SIZES]);
+
 static const struct mgos_vfs_dev_ops stm32_vfs_dev_flash_ops = {
     .open = stm32_vfs_dev_flash_open,
     .read = stm32_vfs_dev_flash_read,
@@ -204,6 +207,7 @@ static const struct mgos_vfs_dev_ops stm32_vfs_dev_flash_ops = {
     .erase = stm32_vfs_dev_flash_erase,
     .get_size = stm32_vfs_dev_flash_get_size,
     .close = stm32_vfs_dev_flash_close,
+    .get_erase_sizes = stm32_vfs_dev_flash_get_erase_sizes,
 };
 
 bool stm32_vfs_dev_flash_register_type(void) {

@@ -134,6 +134,13 @@ static enum mgos_vfs_dev_err esp_vfs_dev_sysflash_close(
   return MGOS_VFS_DEV_ERR_NONE;
 }
 
+static enum mgos_vfs_dev_err esp_vfs_dev_sysflash_get_erase_sizes(
+    struct mgos_vfs_dev *dev, size_t sizes[MGOS_VFS_DEV_NUM_ERASE_SIZES]) {
+  sizes[0] = FLASH_SECTOR_SIZE;
+  (void) dev;
+  return MGOS_VFS_DEV_ERR_NONE;
+}
+
 static const struct mgos_vfs_dev_ops esp_vfs_dev_sysflash_ops = {
     .open = esp_vfs_dev_sysflash_open,
     .read = esp_vfs_dev_sysflash_read,
@@ -141,6 +148,7 @@ static const struct mgos_vfs_dev_ops esp_vfs_dev_sysflash_ops = {
     .erase = esp_vfs_dev_sysflash_erase,
     .get_size = esp_vfs_dev_sysflash_get_size,
     .close = esp_vfs_dev_sysflash_close,
+    .get_erase_sizes = esp_vfs_dev_sysflash_get_erase_sizes,
 };
 
 bool esp_vfs_dev_sysflash_register_type(void) {

@@ -28,7 +28,7 @@
 #include "stm32_sdk_hal.h"
 #include "stm32_system.h"
 
-static const int s_stm32f_flash_layout[FLASH_SECTOR_TOTAL] = {
+static const size_t s_stm32f_flash_layout[FLASH_SECTOR_TOTAL] = {
 #if defined(STM32F4)
 #if STM32_FLASH_SIZE == 524288
     16384,  16384,  16384, 16384, 65536,
@@ -115,4 +115,17 @@ IRAM bool stm32_flash_write_region(int offset, int len, const void *src) {
 out:
   return res;
 }
+
+extern enum mgos_vfs_dev_err stm32_vfs_dev_flash_get_erase_sizes(
+    struct mgos_vfs_dev *dev, size_t sizes[MGOS_VFS_DEV_NUM_ERASE_SIZES]) {
+  for (int i = 0, j = -1; i < (int) ARRAY_SIZE(s_stm32f_flash_layout) && j < 8;
+       i++) {
+    if (j < 0 || s_stm32f_flash_layout[i] != sizes[j]) {
+      sizes[++j] = s_stm32f_flash_layout[i];
+    }
+  }
+  (void) dev;
+  return MGOS_VFS_DEV_ERR_NONE;
+}
+
 #endif /* defined(STM32F4) || defined(STM32F7) */

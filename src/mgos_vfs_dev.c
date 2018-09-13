@@ -181,6 +181,19 @@ size_t mgos_vfs_dev_get_size(struct mgos_vfs_dev *dev) {
   return res;
 }
 
+enum mgos_vfs_dev_err mgos_vfs_dev_get_erase_sizes(
+    struct mgos_vfs_dev *dev,
+    size_t erase_sizes[MGOS_VFS_DEV_NUM_ERASE_SIZES]) {
+  if (dev == NULL) return MGOS_VFS_DEV_ERR_INVAL;
+  memset(erase_sizes, 0, MGOS_VFS_DEV_NUM_ERASE_SIZES * sizeof(erase_sizes[0]));
+  dev_lock(dev);
+  enum mgos_vfs_dev_err res =
+      (dev->ops->get_erase_sizes ? dev->ops->get_erase_sizes(dev, erase_sizes)
+                                 : MGOS_VFS_DEV_ERR_INVAL);
+  dev_unlock(dev);
+  return res;
+}
+
 bool mgos_vfs_dev_close(struct mgos_vfs_dev *dev) {
   bool ret = false;
   if (dev == NULL) goto out;

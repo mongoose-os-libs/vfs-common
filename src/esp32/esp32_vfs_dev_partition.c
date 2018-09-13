@@ -128,6 +128,13 @@ static enum mgos_vfs_dev_err esp32_vfs_dev_partition_close(
   return MGOS_VFS_DEV_ERR_NONE;
 }
 
+static enum mgos_vfs_dev_err esp32_vfs_dev_partition_get_erase_sizes(
+    struct mgos_vfs_dev *dev, size_t sizes[MGOS_VFS_DEV_NUM_ERASE_SIZES]) {
+  sizes[0] = SPI_FLASH_SEC_SIZE;
+  (void) dev;
+  return MGOS_VFS_DEV_ERR_NONE;
+}
+
 static const struct mgos_vfs_dev_ops esp32_vfs_dev_partition_ops = {
     .open = esp32_vfs_dev_partition_open,
     .read = esp32_vfs_dev_partition_read,
@@ -135,6 +142,7 @@ static const struct mgos_vfs_dev_ops esp32_vfs_dev_partition_ops = {
     .erase = esp32_vfs_dev_partition_erase,
     .get_size = esp32_vfs_dev_partition_get_size,
     .close = esp32_vfs_dev_partition_close,
+    .get_erase_sizes = esp32_vfs_dev_partition_get_erase_sizes,
 };
 
 bool esp32_vfs_dev_partition_register_type(void) {

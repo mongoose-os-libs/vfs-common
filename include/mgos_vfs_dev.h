@@ -39,6 +39,8 @@ enum mgos_vfs_dev_err {
   MGOS_VFS_DEV_ERR_IO = -8,       /* Some other kind of I/O error. */
 };
 
+#define MGOS_VFS_DEV_NUM_ERASE_SIZES 8
+
 struct mgos_vfs_dev_ops {
   enum mgos_vfs_dev_err (*open)(struct mgos_vfs_dev *dev, const char *opts);
   /* Note: read and write should return 0 if ok or an error code,
@@ -51,6 +53,10 @@ struct mgos_vfs_dev_ops {
                                  size_t len);
   size_t (*get_size)(struct mgos_vfs_dev *dev);
   enum mgos_vfs_dev_err (*close)(struct mgos_vfs_dev *dev);
+  /* Returns available erase granularity, from smallest to largest.
+   * Unused output slots will be 0. */
+  enum mgos_vfs_dev_err (*get_erase_sizes)(
+      struct mgos_vfs_dev *dev, size_t sizes[MGOS_VFS_DEV_NUM_ERASE_SIZES]);
 };
 
 bool mgos_vfs_dev_register_type(const char *name,
@@ -97,6 +103,9 @@ enum mgos_vfs_dev_err mgos_vfs_dev_erase(struct mgos_vfs_dev *dev,
                                          size_t offset, size_t len);
 
 size_t mgos_vfs_dev_get_size(struct mgos_vfs_dev *dev);
+
+enum mgos_vfs_dev_err mgos_vfs_dev_get_erase_sizes(
+    struct mgos_vfs_dev *dev, size_t erase_sizes[MGOS_VFS_DEV_NUM_ERASE_SIZES]);
 
 /* Close a previously opened or created device. */
 bool mgos_vfs_dev_close(struct mgos_vfs_dev *dev);
