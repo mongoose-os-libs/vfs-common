@@ -135,7 +135,14 @@ static enum mgos_vfs_dev_err stm32_vfs_dev_flash_erase(struct mgos_vfs_dev *dev,
     size_t sector_offset = stm32_flash_get_sector_offset(sector);
     size_t sector_size = stm32_flash_get_sector_size(sector);
     if (abs_offset == sector_offset && len >= sector_size) {
+#ifndef STM32L4
+      /*
+       * We cannot use this optimization on L4 because there a sector filled
+       * with 0xFFs is not necessarily erased, it may have been programmed to
+       * contain 0xFFs and cannot be re-programmed (because of ECC).
+       */
       if (stm32_flash_sector_is_erased(sector)) goto out_ok;
+#endif
       if (!stm32_flash_erase_sector(sector)) {
         res = MGOS_VFS_DEV_ERR_IO;
         goto out;
