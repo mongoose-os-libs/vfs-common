@@ -3,13 +3,6 @@
  * All rights reserved
  */
 
-/*
- * VFS subsystem multiplexes calls to libc file API methods such as open,
- * read, write and close between (potentially) several filesystems attached
- * at different mount points.
- * A filesystem is backed by a device which supports block reads and writes.
- */
-
 #ifndef CS_FW_SRC_MGOS_VFS_H_
 #define CS_FW_SRC_MGOS_VFS_H_
 
