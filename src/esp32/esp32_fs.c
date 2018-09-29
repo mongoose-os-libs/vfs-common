@@ -38,6 +38,7 @@
 #include "mgos_vfs.h"
 #include "mgos_vfs_dev.h"
 #include "mgos_vfs_fs_spiffs.h"
+#include "mgos_vfs_internal.h"
 
 #include "esp32_vfs_dev_partition.h"
 
@@ -62,14 +63,14 @@ int esp32_get_boot_slot() {
   return SUBTYPE_TO_SLOT(p->subtype);
 }
 
-bool esp32_fs_mount_part(const char *label, const char *path) {
+bool esp32_fs_mount_part(const char *label, const char *path,
+                         const char *fs_type, const char *fs_opts) {
   bool encrypt = false;
-  const char *fs_type = CS_STRINGIFY_MACRO(MGOS_ROOT_FS_TYPE);
 #if CS_SPIFFS_ENABLE_ENCRYPTION
   encrypt = esp_flash_encryption_enabled();
 #endif
-  char fs_opts[100];
-  strcpy(fs_opts, CS_STRINGIFY_MACRO(MGOS_ROOT_FS_OPTS));
+  char fs_opts_c[100];
+  strcpy(fs_opts_c, fs_opts);
   if (encrypt && strcmp(fs_type, "SPIFFS") == 0) {
     char *c = strrchr(fs_opts, '}');
     strcpy(c, ", \"encr\": true}");
@@ -105,7 +106,8 @@ bool mgos_core_fs_init(void) {
     LOG(LL_ERROR, ("No FS partition"));
     return false;
   }
-  return esp32_fs_mount_part(fs_part->label, "/");
+  return esp32_fs_mount_part(fs_part->label, "/", mgos_vfs_get_root_fs_type(),
+                             mgos_vfs_get_root_fs_opts());
 }
 
 bool mgos_vfs_common_init(void) {
