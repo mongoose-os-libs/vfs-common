@@ -30,6 +30,7 @@
 
 #include "common/cs_dbg.h"
 #include "common/cs_file.h"
+#include "common/str_util.h"
 
 #include "frozen.h"
 
@@ -63,13 +64,17 @@ int esp32_get_boot_slot() {
 
 bool esp32_fs_mount_part(const char *label, const char *path) {
   bool encrypt = false;
+  const char *fs_type = CS_STRINGIFY_MACRO(MGOS_ROOT_FS_TYPE);
 #if CS_SPIFFS_ENABLE_ENCRYPTION
   encrypt = esp_flash_encryption_enabled();
 #endif
   char fs_opts[100];
-  struct json_out out2 = JSON_OUT_BUF(fs_opts, sizeof(fs_opts));
-  json_printf(&out2, "{encr: %B}", encrypt);
-  return mgos_vfs_mount_dev_name(path, label, MGOS_VFS_FS_TYPE_SPIFFS, fs_opts);
+  strcpy(fs_opts, CS_STRINGIFY_MACRO(MGOS_ROOT_FS_OPTS));
+  if (encrypt && strcmp(fs_type, "SPIFFS") == 0) {
+    char *c = strrchr(fs_opts, '}');
+    strcpy(c, ", \"encr\": true}");
+  }
+  return mgos_vfs_mount_dev_name(path, label, fs_type, fs_opts);
 }
 
 static void esp32_register_partition_devs(void) {
