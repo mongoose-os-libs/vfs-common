@@ -72,10 +72,10 @@ bool esp32_fs_mount_part(const char *label, const char *path,
   char fs_opts_c[100];
   strcpy(fs_opts_c, fs_opts);
   if (encrypt && strcmp(fs_type, "SPIFFS") == 0) {
-    char *c = strrchr(fs_opts, '}');
+    char *c = strrchr(fs_opts_c, '}');
     strcpy(c, ", \"encr\": true}");
   }
-  return mgos_vfs_mount_dev_name(path, label, fs_type, fs_opts);
+  return mgos_vfs_mount_dev_name(path, label, fs_type, fs_opts_c);
 }
 
 static void esp32_register_partition_devs(void) {
