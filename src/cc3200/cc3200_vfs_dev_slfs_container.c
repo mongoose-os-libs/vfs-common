@@ -267,7 +267,7 @@ _i32 fs_switch_container(struct dev_data *dd, _u32 mask_begin, _u32 mask_len) {
     if (offset + len > dd->size) {
       len = dd->size - offset;
     }
-    LOG(LL_DEBUG, ("copy %d @ %d", (int) len, (int) offset));
+    LOG(LL_VERBOSE_DEBUG, ("copy %d @ %d", (int) len, (int) offset));
     if (len > 0) {
       r = sl_FsRead(old_fh, offset, buf, len);
       if (r != len) {
