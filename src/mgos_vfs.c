@@ -915,8 +915,12 @@ int munmap(void *addr, size_t len) {
 #endif /* CS_MMAP */
 
 size_t mgos_get_fs_size(void) {
+  return mgos_vfs_get_fs_size("/");
+}
+
+size_t mgos_vfs_get_fs_size(const char *path) {
   size_t res;
-  struct mgos_vfs_mount_entry *me = find_mount_by_path("/", NULL);
+  struct mgos_vfs_mount_entry *me = find_mount_by_path(path, NULL);
   if (me == NULL) return 0;
   mgos_vfs_lock();
   res = me->fs->ops->get_space_total(me->fs);
@@ -926,8 +930,12 @@ size_t mgos_get_fs_size(void) {
 }
 
 size_t mgos_get_free_fs_size(void) {
+  return mgos_vfs_get_free_fs_size("/");
+}
+
+size_t mgos_vfs_get_free_fs_size(const char *path) {
   size_t res;
-  struct mgos_vfs_mount_entry *me = find_mount_by_path("/", NULL);
+  struct mgos_vfs_mount_entry *me = find_mount_by_path(path, NULL);
   if (me == NULL) return 0;
   mgos_vfs_lock();
   res = me->fs->ops->get_space_free(me->fs);

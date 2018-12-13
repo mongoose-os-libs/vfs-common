@@ -226,6 +226,16 @@ bool mgos_vfs_umount(const char *path);
 void mgos_vfs_umount_all(void);
 
 /*
+ * Get FS size of a file system at the specified mountpoint.
+ */
+size_t mgos_vfs_get_fs_size (const char *path);
+
+/*
+ * Get free spece of a file system at the specified mountpoint.
+ */
+size_t mgos_vfs_get_free_fs_size (const char *path);
+
+/*
  * Perform GC of a filesystem at the specified mountpoint.
  */
 bool mgos_vfs_gc(const char *path);
