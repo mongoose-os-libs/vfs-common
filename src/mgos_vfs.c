@@ -1002,3 +1002,25 @@ bool mgos_vfs_gc(const char *path) {
   LOG(LL_INFO, ("%s %p %d", path, fs, ret));
   return ret;
 }
+
+size_t mgos_get_fs_size_path(const char *path) {
+  size_t res;
+  struct mgos_vfs_mount_entry *me = find_mount_by_path("/", NULL);
+  if (me == NULL) return 0;
+  mgos_vfs_lock();
+  res = me->fs->ops->get_space_total(me->fs);
+  me->fs->refs--;
+  mgos_vfs_unlock();
+  return res;
+}
+
+size_t mgos_get_free_fs_size_path(const char *path) {
+  size_t res;
+  struct mgos_vfs_mount_entry *me = find_mount_by_path(path, NULL);
+  if (me == NULL) return 0;
+  mgos_vfs_lock();
+  res = me->fs->ops->get_space_free(me->fs);
+  me->fs->refs--;
+  mgos_vfs_unlock();
+  return res;
+}
