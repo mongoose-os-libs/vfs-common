@@ -20,6 +20,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 
+#include "common/str_util.h"
 #include "common/platform.h"
 #include "common/platforms/simplelink/sl_fs_slfs.h"
 
@@ -94,8 +95,12 @@ bool cc32xx_vfs_fs_slfs_gc(struct mgos_vfs_fs *fs) {
 
 int cc32xx_vfs_fs_slfs_open(struct mgos_vfs_fs *fs, const char *path, int flags,
                             int mode) {
+  char buf[32], *slash_path = buf;
+  mg_asprintf(&slash_path, sizeof(buf), "/%s", path);
+  int ret = fs_slfs_open(slash_path, flags, mode);
+  if (slash_path != buf) free(slash_path);
   (void) fs;
-  return fs_slfs_open(path, flags, mode);
+  return ret;
 }
 
 int cc32xx_vfs_fs_slfs_close(struct mgos_vfs_fs *fs, int fd) {

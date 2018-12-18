@@ -97,7 +97,7 @@ static enum mgos_vfs_dev_err cc3220_vfs_dev_flash_open(struct mgos_vfs_dev *dev,
                      image, dd->size, (int) fi.Len));
       goto out;
     }
-    fh = slfs_open(image, SL_FS_READ);
+    fh = slfs_open(image, SL_FS_READ, NULL);
     if (fh < 0) {
       LOG(LL_ERROR, ("Failed to open %s: %d", image, fh));
       goto out;
@@ -135,7 +135,7 @@ static enum mgos_vfs_dev_err cc3220_vfs_dev_flash_open(struct mgos_vfs_dev *dev,
     }
     sl_FsClose(fh, NULL, NULL, 0);
     /* Wipe the source image: overwrite with zeroes. */
-    fh = slfs_open(image, SL_FS_WRITE);
+    fh = slfs_open(image, SL_FS_WRITE, NULL);
     if (fh >= 0) {
       sl_FsClose(fh, NULL, NULL, 0);
     }

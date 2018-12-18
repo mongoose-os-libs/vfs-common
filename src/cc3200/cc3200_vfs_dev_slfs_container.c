@@ -81,7 +81,7 @@ int fs_get_info(const char *cpfx, int cidx, struct fs_container_info *info) {
     return r;
   }
   if (SL_FI_FILE_MAX_SIZE(fi) < sizeof(meta)) return -200;
-  fh = slfs_open(fname, SL_FS_READ);
+  fh = slfs_open(fname, SL_FS_READ, NULL);
   DBG(("fopen %s %d", fname, (int) fh));
   if (fh < 0) return fh;
 
@@ -168,7 +168,7 @@ static bool fs_write_mount_meta(struct dev_data *m) {
 _i32 fs_open_container(const char *cpfx, int cidx) {
   _u8 fname[MAX_FS_CONTAINER_FNAME_LEN];
   cc3200_vfs_dev_slfs_container_fname(cpfx, cidx, fname);
-  _i32 fh = slfs_open(fname, SL_FS_READ);
+  _i32 fh = slfs_open(fname, SL_FS_READ, NULL);
   LOG((fh >= 0 ? LL_DEBUG : LL_ERROR), ("open %s -> %ld", fname, fh));
   return fh;
 }
@@ -180,7 +180,7 @@ _i32 fs_create_container(const char *cpfx, int cidx, _u32 size) {
   cc3200_vfs_dev_slfs_container_fname(cpfx, cidx, fname);
   int r = sl_FsDel(fname, 0);
   DBG(("del %s -> %ld", fname, r));
-  fh = slfs_open(fname, FS_MODE_OPEN_CREATE(fsize, 0));
+  fh = slfs_open(fname, FS_MODE_OPEN_CREATE(fsize, 0), NULL);
   LOG((fh >= 0 ? LL_DEBUG : LL_ERROR),
       ("open %s %lu -> %ld", fname, fsize, fh));
   (void) r;
@@ -236,7 +236,7 @@ _i32 fs_switch_container(struct dev_data *dd, _u32 mask_begin, _u32 mask_len) {
   if (old_fh < 0) {
     _u8 fname[MAX_FS_CONTAINER_FNAME_LEN];
     cc3200_vfs_dev_slfs_container_fname(dd->cpfx, dd->cidx, fname);
-    old_fh = slfs_open(fname, SL_FS_READ);
+    old_fh = slfs_open(fname, SL_FS_READ, NULL);
     LOG(LL_DEBUG, ("open %s %ld", dd->cpfx, old_fh));
     if (old_fh < 0) {
       r = -1;
