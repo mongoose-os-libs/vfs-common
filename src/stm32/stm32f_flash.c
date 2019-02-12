@@ -17,7 +17,7 @@
 
 #include "stm32_flash.h"
 
-#if defined(STM32F4) || defined(STM32F7)
+#if defined(STM32F2) || defined(STM32F4) || defined(STM32F7)
 
 #include "common/cs_dbg.h"
 #include "common/str_util.h"
@@ -29,7 +29,7 @@
 #include "stm32_system.h"
 
 static const size_t s_stm32f_flash_layout[FLASH_SECTOR_TOTAL] = {
-#if defined(STM32F4)
+#if defined(STM32F2) || defined(STM32F4)
 #if STM32_FLASH_SIZE == 524288
     16384,  16384,  16384, 16384, 65536,
     131072, 131072, 131072
