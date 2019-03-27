@@ -43,12 +43,11 @@ bool mgos_core_fs_init(void) {
   uint32_t root_fs_addr = bcfg->fs_addresses[bcfg->current_rom];
   uint32_t root_fs_size = bcfg->fs_sizes[bcfg->current_rom];
   return (
-      esp_vfs_dev_sysflash_register_type() &&
       mgos_vfs_dev_create_and_register(MGOS_VFS_DEV_TYPE_SYSFLASH, "",
                                        ESP8266_SYSFLASH_DEV_NAME) &&
       esp_fs_mount(root_fs_addr, root_fs_size, MGOS_VFS_ROOT_DEV_NAME, "/"));
 }
 
 bool mgos_vfs_common_init(void) {
-  return true;
+  return esp_vfs_dev_sysflash_register_type();
 }

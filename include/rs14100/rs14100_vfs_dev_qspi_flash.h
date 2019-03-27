@@ -15,17 +15,18 @@
  * limitations under the License.
  */
 
-#include "mgos.h"
+#pragma once
 
-#include "rs14100_vfs_dev_qspi_flash.h"
+#include <stdbool.h>
 
-bool mgos_core_fs_init(void) {
-  const char *dev_name = "fs0";
-  const char *fs_type = CS_STRINGIFY_MACRO(MGOS_ROOT_FS_TYPE);
-  const char *fs_opts = CS_STRINGIFY_MACRO(MGOS_ROOT_FS_OPTS);
-  return mgos_vfs_mount_dev_name("/", dev_name, fs_type, fs_opts);
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+#define MGOS_VFS_DEV_TYPE_RSI1X_FLASH "rsi1x_flash"
+
+bool rs14100_vfs_dev_qspi_flash_register_type(void);
+
+#ifdef __cplusplus
 }
-
-bool mgos_vfs_common_init(void) {
-  return rs14100_vfs_dev_qspi_flash_register_type();
-}
+#endif
