@@ -17,12 +17,22 @@
 
 #include "mgos.h"
 
+#ifdef MGOS_HAVE_BOOTLOADER
+#include "mgos_boot_cfg.h"
+#endif
+
 #include "rs14100_vfs_dev_qspi_flash.h"
 
 bool mgos_core_fs_init(void) {
   const char *dev_name = "fs0";
   const char *fs_type = CS_STRINGIFY_MACRO(MGOS_ROOT_FS_TYPE);
   const char *fs_opts = CS_STRINGIFY_MACRO(MGOS_ROOT_FS_OPTS);
+#ifdef MGOS_HAVE_BOOTLOADER
+  struct mgos_boot_cfg *bcfg = mgos_boot_cfg_get();
+  if (bcfg != NULL) {
+    dev_name = bcfg->slots[bcfg->active_slot].cfg.fs_dev;
+  }
+#endif
   return mgos_vfs_mount_dev_name("/", dev_name, fs_type, fs_opts);
 }
 
