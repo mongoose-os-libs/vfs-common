@@ -51,7 +51,7 @@ static enum mgos_vfs_dev_err rs14100_vfs_dev_qspi_flash_open(
   return MGOS_VFS_DEV_ERR_NONE;
 }
 
-IRAM static void rs14100_qspi_ctl_acquire(void) {
+IRAM void rs14100_qspi_ctl_acquire(void) {
   mgos_ints_disable();
   while (!QSPI->QSPI_MANUAL_STATUS_b.AUTO_MODE_FSM_IDLE_SCLK) {
   }
@@ -66,7 +66,7 @@ IRAM static void rs14100_qspi_ctl_acquire(void) {
   QSPI->QSPI_MANUAL_CONFIG1_b.QSPI_MANUAL_CSN_SELECT = 0;
 }
 
-IRAM static void rs14100_qspi_ctl_release(void) {
+IRAM void rs14100_qspi_ctl_release(void) {
   QSPI->QSPI_MANUAL_CONFIG1_b.QSPI_MANUAL_QSPI_MODE = 0;
   QSPI->QSPI_BUS_MODE_b.QSPI_AUTO_MODE_FRM_REG = 1;
   while (!QSPI->QSPI_MANUAL_STATUS_b.QSPI_AUTO_MODE) {
@@ -149,9 +149,29 @@ IRAM static void rs14100_qspi_flash_wren(void) {
   rs14100_qspi_flash_cs_off();
 }
 
-static enum mgos_vfs_dev_err rs14100_vfs_dev_qspi_flash_read(
+IRAM static enum mgos_vfs_dev_err rs14100_vfs_dev_qspi_flash_read(
     struct mgos_vfs_dev *dev, size_t addr, size_t len, void *dst) {
-  memcpy(dst, (uint8_t *) (FLASH_BASE + addr), len);
+  const uint8_t *p = (const uint8_t *) (FLASH_BASE + addr);
+  uint8_t *q = (uint8_t *) dst;
+  // Align source to 32-bit boundary for max flash read performance.
+  while (((uintptr_t) p) % 4 != 0 && len > 0) {
+    *q++ = *p++;
+    len--;
+  }
+  // Perform bulk of the copy in 32-bit reads.
+  const uint32_t *p32 = (const uint32_t *) p;
+  uint32_t *q32 = (uint32_t *) q;
+  while (len >= 4) {
+    *q32++ = *p32++;
+    len -= 4;
+  }
+  // Byte-wise copy of the remainder.
+  p = (const uint8_t *) p32;
+  q = (uint8_t *) q32;
+  while (len > 0) {
+    *q++ = *p++;
+    len--;
+  }
   (void) dev;
   return MGOS_VFS_DEV_ERR_NONE;
 }

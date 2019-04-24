@@ -27,6 +27,10 @@ extern "C" {
 
 bool rs14100_vfs_dev_qspi_flash_register_type(void);
 
+void rs14100_qspi_ctl_acquire(void);
+
+void rs14100_qspi_ctl_release(void);
+
 #ifdef __cplusplus
 }
 #endif
