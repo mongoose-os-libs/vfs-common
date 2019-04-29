@@ -16,8 +16,8 @@
 
 #ifdef CS_MMAP
 #if CS_PLATFORM == CS_P_ESP32
-#include "fw/platforms/esp32/src/esp32_fs.h"
-#include "fw/platforms/esp32/src/esp32_mmap.h"
+#include "esp32_fs.h"
+#include "esp32_mmap.h"
 #elif CS_PLATFORM == CS_P_ESP8266
 #include "esp_fs.h"
 #include "esp_mmap.h"
