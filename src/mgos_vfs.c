@@ -53,8 +53,8 @@ struct mgos_vfs_mount_entry {
   SLIST_ENTRY(mgos_vfs_mount_entry) next;
 };
 
-SLIST_HEAD(s_mounts,
-           mgos_vfs_mount_entry) s_mounts = SLIST_HEAD_INITIALIZER(s_mounts);
+SLIST_HEAD(s_mounts, mgos_vfs_mount_entry)
+s_mounts = SLIST_HEAD_INITIALIZER(s_mounts);
 
 bool mgos_vfs_fs_register_type(const char *type,
                                const struct mgos_vfs_fs_ops *ops) {
@@ -250,9 +250,10 @@ static struct mgos_vfs_mount_entry *find_mount_by_path(const char *path,
   }
   mgos_vfs_unlock();
 out:
-  LOG(LL_DEBUG, ("%s -> %s pl %u -> %d %p", path, (real_path ? real_path : ""),
-                 (unsigned int) prefix_len, (me ? me->mount_id : -1),
-                 (me ? me->fs : NULL)));
+  LOG(LL_DEBUG,
+      ("%s -> %s pl %u -> %d %p (refs %d)", path, (real_path ? real_path : ""),
+       (unsigned int) prefix_len, (me ? me->mount_id : -1),
+       (me ? me->fs : NULL), (me ? me->fs->refs : -1)));
   if (me != NULL && fs_path != NULL) {
     *fs_path = real_path;
     p = real_path + prefix_len;
@@ -345,8 +346,8 @@ int mgos_vfs_open(const char *path, int flags, int mode) {
 out:
   mgos_vfs_unlock();
   LOG(LL_DEBUG,
-      ("%s 0x%x 0x%x => %p %s %d => %d (refs %d)", path, flags, mode, fs,
-       (fs_path ? fs_path : ""), fs_fd, vfd, (me ? me->fs->refs : -1)));
+      ("%s %s 0x%x 0x%x => %p %s %d => %d (refs %d)", "open", path, flags, mode,
+       fs, (fs_path ? fs_path : ""), fs_fd, vfd, (me ? me->fs->refs : -1)));
   free(fs_path);
   return vfd;
 }
@@ -372,13 +373,14 @@ int mgos_vfs_close(int vfd) {
     goto out;
   }
   fs = me->fs;
+  LOG(LL_INFO, ("%d fs %p refs %d", vfd, fs, me->fs->refs));
   ret = fs->ops->close(fs, fs_fd);
 out:
   if (ret == 0) {
     me->fs->refs--;
   }
   mgos_vfs_unlock();
-  LOG(LL_DEBUG, ("%d => %p:%d => %d (refs %d)", vfd, fs, fs_fd, ret,
+  LOG(LL_DEBUG, ("%s %d => %p:%d => %d (refs %d)", "close", vfd, fs, fs_fd, ret,
                  (me ? me->fs->refs : -1)));
   return ret;
 }
@@ -405,8 +407,8 @@ ssize_t mgos_vfs_read(int vfd, void *dst, size_t len) {
   fs = me->fs;
   ret = fs->ops->read(fs, fs_fd, dst, len);
 out:
-  LOG(LL_VERBOSE_DEBUG,
-      ("%d %u => %p:%d => %d", vfd, (unsigned int) len, fs, fs_fd, ret));
+  LOG(LL_VERBOSE_DEBUG, ("%s %d %u => %p:%d => %d", "read", vfd,
+                         (unsigned int) len, fs, fs_fd, ret));
   return ret;
 }
 #if MGOS_VFS_DEFINE_LIBC_API
@@ -444,8 +446,8 @@ ssize_t mgos_vfs_write(int vfd, const void *src, size_t len) {
   fs = me->fs;
   ret = fs->ops->write(fs, fs_fd, src, len);
 out:
-  LOG(LL_DEBUG,
-      ("%d %u => %p:%d => %d", vfd, (unsigned int) len, fs, fs_fd, (int) ret));
+  LOG(LL_DEBUG, ("%s %d %u => %p:%d => %d", "write", vfd, (unsigned int) len,
+                 fs, fs_fd, (int) ret));
   return ret;
 }
 #if MGOS_VFS_DEFINE_LIBC_API
@@ -476,8 +478,8 @@ out:
   if (me != NULL) me->fs->refs--;
   mgos_vfs_unlock();
   LOG(LL_DEBUG,
-      ("%s => %p %s => %d (size %d)", path, fs, (fs_path ? fs_path : ""), ret,
-       (int) (ret == 0 ? st->st_size : 0)));
+      ("%s %s => %p %s => %d (size %d)", "stat", path, fs,
+       (fs_path ? fs_path : ""), ret, (int) (ret == 0 ? st->st_size : 0)));
   free(fs_path);
   return ret;
 }
@@ -504,7 +506,7 @@ int mgos_vfs_fstat(int vfd, struct stat *st) {
   fs = me->fs;
   ret = fs->ops->fstat(fs, fs_fd, st);
 out:
-  LOG(LL_DEBUG, ("%d => %p:%d => %d (size %d)", vfd, fs, fs_fd, ret,
+  LOG(LL_DEBUG, ("%s %d => %p:%d => %d (size %d)", "fstat", vfd, fs, fs_fd, ret,
                  (int) (ret == 0 ? st->st_size : 0)));
   return ret;
 }
@@ -532,8 +534,8 @@ off_t mgos_vfs_lseek(int vfd, off_t offset, int whence) {
   fs = me->fs;
   ret = fs->ops->lseek(fs, fs_fd, offset, whence);
 out:
-  LOG(LL_DEBUG, ("%d %ld %d => %p:%d => %ld", vfd, (long int) offset, whence,
-                 fs, fs_fd, (long int) ret));
+  LOG(LL_DEBUG, ("%s %d %ld %d => %p:%d => %ld", "lseek", vfd,
+                 (long int) offset, whence, fs, fs_fd, (long int) ret));
   return ret;
 }
 #if MGOS_VFS_DEFINE_LIBC_API
@@ -563,7 +565,8 @@ int mgos_vfs_unlink(const char *path) {
 out:
   if (me != NULL) me->fs->refs--;
   mgos_vfs_unlock();
-  LOG(LL_DEBUG, ("%s => %p %s => %d", path, fs, (fs_path ? fs_path : ""), ret));
+  LOG(LL_DEBUG, ("%s %s => %p %s => %d", "unlink", path, fs,
+                 (fs_path ? fs_path : ""), ret));
   free(fs_path);
   return (ret == 0 ? 0 : -1);
 }
@@ -599,7 +602,7 @@ out:
   if (me != NULL) me->fs->refs--;
   if (me_dst != NULL) me_dst->fs->refs--;
   mgos_vfs_unlock();
-  LOG(LL_DEBUG, ("%s -> %s => %p %s -> %s => %d", src, dst, fs,
+  LOG(LL_DEBUG, ("%s %s -> %s => %p %s -> %s => %d", "rename", src, dst, fs,
                  (fs_src ? fs_src : ""), (fs_dst ? fs_dst : ""), ret));
   free(fs_src);
   free(fs_dst);
@@ -664,8 +667,8 @@ out:
   if (me != NULL && dir == NULL) me->fs->refs--;
   mgos_vfs_unlock();
   LOG(LL_DEBUG,
-      ("%s => %p %s %p => %p (refs %d)", path, fs, (fs_path ? fs_path : ""),
-       fs_dir, dir, (me ? me->fs->refs : -1)));
+      ("%s %s => %p %s %p => %p (refs %d)", "opendir", path, fs,
+       (fs_path ? fs_path : ""), fs_dir, dir, (me ? me->fs->refs : -1)));
   free(fs_path);
   return (DIR *) dir;
 }
@@ -726,8 +729,8 @@ int mgos_vfs_closedir(DIR *pdir) {
   dir->me->fs->refs--;
   mgos_vfs_unlock();
 out:
-  LOG(LL_DEBUG, ("%p => %p:%p => %d (refs %d)", dir, fs, fs_dir, ret,
-                 (me ? me->fs->refs : -1)));
+  LOG(LL_DEBUG, ("%s %p => %p:%p => %d (refs %d)", "closedir", dir, fs, fs_dir,
+                 ret, (me ? me->fs->refs : -1)));
   free(dir);
   return ret;
 }
@@ -815,12 +818,8 @@ void *mgos_vfs_mmap(void *addr, size_t len, int prot, int flags, int vfd,
     goto clean;
   }
 
-  /*
-   * fs->refs was incremented by find_mount_by_vfd, it'll be decremented back
-   * in free_mmap_desc.
-   */
-
   desc->fs = me->fs;
+  desc->fs->refs++;
 
   if (desc->fs->ops->read_mmapped_byte == NULL) {
     LOG(LL_ERROR, ("filesystem doesn't support mmapping"));
@@ -851,7 +850,9 @@ clean:
 
   if (!ok) {
     if (desc != NULL) {
+      mgos_vfs_lock();
       free_mmap_desc(desc);
+      mgos_vfs_unlock();
       desc = NULL;
     }
     return MAP_FAILED;
