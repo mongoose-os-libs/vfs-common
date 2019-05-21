@@ -373,7 +373,6 @@ int mgos_vfs_close(int vfd) {
     goto out;
   }
   fs = me->fs;
-  LOG(LL_INFO, ("%d fs %p refs %d", vfd, fs, me->fs->refs));
   ret = fs->ops->close(fs, fs_fd);
 out:
   if (ret == 0) {
