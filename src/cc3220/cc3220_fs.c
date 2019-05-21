@@ -26,6 +26,7 @@
 #include "cc3220_vfs_dev_flash.h"
 
 bool mgos_core_fs_init(void) {
+  // clang-format off
   return (mgos_vfs_mount(
              "/", MGOS_DEV_TYPE_FLASH,
              "{offset: " CS_STRINGIFY_MACRO(MGOS_FS_OFFSET) ", "
@@ -36,6 +37,7 @@ bool mgos_core_fs_init(void) {
              "ps: " CS_STRINGIFY_MACRO(MGOS_FS_PAGE_SIZE) ", "
              "es: " CS_STRINGIFY_MACRO(MGOS_FS_ERASE_SIZE) "}") &&
          cc32xx_fs_slfs_mount("/slfs"));
+  // clang-format on
 }
 
 bool mgos_vfs_common_init(void) {

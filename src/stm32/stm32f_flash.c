@@ -22,8 +22,8 @@
 #include "common/cs_dbg.h"
 #include "common/str_util.h"
 
-#include "mongoose.h"
 #include "mgos_system.h"
+#include "mongoose.h"
 
 #include "stm32_sdk_hal.h"
 #include "stm32_system.h"

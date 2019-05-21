@@ -20,9 +20,9 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-#include "common/str_util.h"
 #include "common/platform.h"
 #include "common/platforms/simplelink/sl_fs_slfs.h"
+#include "common/str_util.h"
 
 #include "mgos_vfs.h"
 
@@ -59,8 +59,8 @@ static void slfs_get_fs_info(size_t *bytes_total, size_t *bytes_used,
   if (sl_FsCtl((SlFsCtl_e) SL_FS_CTL_GET_STORAGE_INFO, 0, NULL, NULL, 0,
                (_u8 *) &si, sizeof(si), NULL) == 0) {
     _u32 bs = si.DeviceUsage.DeviceBlockSize;
-    *bytes_total = si.DeviceUsage.DeviceBlocksCapacity *bs;
-    *bytes_free = si.DeviceUsage.NumOfAvailableBlocksForUserFiles *bs;
+    *bytes_total = si.DeviceUsage.DeviceBlocksCapacity * bs;
+    *bytes_free = si.DeviceUsage.NumOfAvailableBlocksForUserFiles * bs;
     *bytes_used = *bytes_total - *bytes_free;
   }
 #endif

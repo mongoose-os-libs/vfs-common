@@ -17,12 +17,14 @@
 
 #include "cc3220_vfs_dev_flash.h"
 
+// clang-format off
 #include "inc/hw_types.h"
 #include "inc/hw_flash_ctrl.h"
 #include "inc/hw_memmap.h"
 #include "driverlib/flash.h"
 #include "driverlib/rom.h"
 #include "driverlib/rom_map.h"
+// clang-format on
 
 #include "common/cs_dbg.h"
 #include "common/platform.h"
