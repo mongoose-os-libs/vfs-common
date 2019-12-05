@@ -15,8 +15,7 @@
  * limitations under the License.
  */
 
-#ifndef CS_FW_PLATFORMS_ESP8266_SRC_ESP_FS_H_
-#define CS_FW_PLATFORMS_ESP8266_SRC_ESP_FS_H_
+#pragma once
 
 #include <stdbool.h>
 #include <stdint.h>
@@ -30,6 +29,8 @@ extern "C" {
 
 bool esp_fs_mount(uint32_t addr, uint32_t size, const char *dev_name,
                   const char *path);
+bool esp_fs_mount2(uint32_t addr, uint32_t size, const char *dev_name,
+                   const char *fs_type, const char *fs_opts, const char *path);
 
 /*
  * Translate file descriptor returned by open() to the one suitable for use
@@ -40,5 +41,3 @@ bool esp_fs_mount(uint32_t addr, uint32_t size, const char *dev_name,
 #ifdef __cplusplus
 }
 #endif
-
-#endif /* CS_FW_PLATFORMS_ESP8266_SRC_ESP_FS_H_ */

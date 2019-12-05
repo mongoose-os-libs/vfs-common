@@ -22,7 +22,6 @@
 
 #include "common/cs_dbg.h"
 #include "esp_missing_includes.h"
-
 #include "mgos_hal.h"
 
 #define FLASH_SECTOR_SIZE 0x1000

@@ -18,15 +18,12 @@
 #include "esp_vfs_dev_sysflash.h"
 
 #include "c_types.h"
-#include "spi_flash.h"
-
 #include "common/cs_dbg.h"
-#include "mongoose.h"
-
-#include "mgos_vfs_dev.h"
-#include "mgos_vfs_fs_spiffs.h"
-
 #include "esp_fs.h"
+#include "mgos_utils.h"
+#include "mgos_vfs_dev.h"
+#include "mongoose.h"
+#include "spi_flash.h"
 
 #define FLASH_UNIT_SIZE 4
 
@@ -37,23 +34,17 @@ static enum mgos_vfs_dev_err esp_vfs_dev_sysflash_open(struct mgos_vfs_dev *dev,
   return MGOS_VFS_DEV_ERR_NONE;
 }
 
-static enum mgos_vfs_dev_err esp_spi_flash_readwrite(size_t addr, size_t size,
-                                                     void *data, bool write) {
-  enum mgos_vfs_dev_err res = MGOS_VFS_DEV_ERR_INVAL;
-  /*
-   * With proper configurarion spiffs never reads or writes more than
-   * MGOS_SPIFFS_DEFAULT_PAGE_SIZE
-   */
-  if (size > MGOS_SPIFFS_DEFAULT_PAGE_SIZE) {
-    LOG(LL_ERROR, ("Invalid size provided to read/write (%d)", (int) size));
-    goto out;
-  }
+#define IO_SIZE 128
 
-  res = MGOS_VFS_DEV_ERR_IO;
-  u32_t tmp_buf[(MGOS_SPIFFS_DEFAULT_PAGE_SIZE + FLASH_UNIT_SIZE * 2) /
-                sizeof(u32_t)];
-  u32_t aligned_addr = addr & (-FLASH_UNIT_SIZE);
-  u32_t aligned_size =
+static enum mgos_vfs_dev_err esp_spi_flash_readwrite_128(size_t addr,
+                                                         size_t size,
+                                                         void *data,
+                                                         bool write) {
+  enum mgos_vfs_dev_err res = MGOS_VFS_DEV_ERR_IO;
+  /* Both flash address and memory address need to be word-aligned. */
+  uint32_t tmp_buf[(IO_SIZE + FLASH_UNIT_SIZE * 2) / sizeof(uint32_t)];
+  uint32_t aligned_addr = addr & (-FLASH_UNIT_SIZE);
+  size_t aligned_size =
       ((size + (FLASH_UNIT_SIZE - 1)) & -FLASH_UNIT_SIZE) + FLASH_UNIT_SIZE;
 
   int sres = spi_flash_read(aligned_addr, tmp_buf, aligned_size);
@@ -64,11 +55,11 @@ static enum mgos_vfs_dev_err esp_spi_flash_readwrite(size_t addr, size_t size,
   }
 
   if (!write) {
-    memcpy(data, ((u8_t *) tmp_buf) + (addr - aligned_addr), size);
+    memcpy(data, ((uint8_t *) tmp_buf) + (addr - aligned_addr), size);
     goto out_ok;
   }
 
-  memcpy(((u8_t *) tmp_buf) + (addr - aligned_addr), data, size);
+  memcpy(((uint8_t *) tmp_buf) + (addr - aligned_addr), data, size);
 
   sres = spi_flash_write(aligned_addr, tmp_buf, aligned_size);
   if (sres != 0) {
@@ -82,6 +73,23 @@ out:
   LOG((res == 0 ? LL_VERBOSE_DEBUG : LL_ERROR),
       ("%s %u @ 0x%x => %d", (write ? "write" : "read"), size, addr, res));
   return res;
+}
+
+static enum mgos_vfs_dev_err esp_spi_flash_readwrite(size_t addr, size_t size,
+                                                     void *data, bool write) {
+  uint8_t *p = (uint8_t *) data;
+  while (size > 0) {
+    size_t io_size = MIN(size, IO_SIZE);
+    enum mgos_vfs_dev_err err =
+        esp_spi_flash_readwrite_128(addr, io_size, p, write);
+    if (err != MGOS_VFS_DEV_ERR_NONE) {
+      return err;
+    }
+    addr += io_size;
+    size -= io_size;
+    p += io_size;
+  }
+  return MGOS_VFS_DEV_ERR_NONE;
 }
 
 static enum mgos_vfs_dev_err esp_vfs_dev_sysflash_read(struct mgos_vfs_dev *dev,
