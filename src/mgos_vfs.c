@@ -26,6 +26,7 @@
 
 #include "common/cs_dbg.h"
 #include "common/queue.h"
+#include "common/str_util.h"
 
 #include "mgos_debug.h"
 #include "mgos_hal.h"
@@ -33,6 +34,13 @@
 #ifdef CS_MMAP
 #include <sys/mman.h>
 #endif /* CS_MMAP */
+
+#ifdef MGOS_HAVE_VFS_FS_LFS
+#include "mgos_vfs_fs_lfs.h"
+#endif
+#ifdef MGOS_HAVE_VFS_FS_SPIFFS
+#include "mgos_vfs_fs_spiffs.h"
+#endif
 
 #define MAKE_VFD(mount_id, fs_fd) (((mount_id) << 8) | ((fs_fd) &0xff))
 
@@ -82,6 +90,7 @@ static inline void mgos_vfs_unlock(void) {
 }
 
 static const struct mgos_vfs_fs_type_entry *find_fs_type(const char *fs_type) {
+  if (fs_type == NULL) return NULL;
   struct mgos_vfs_fs_type_entry *fte = NULL;
   mgos_vfs_lock();
   SLIST_FOREACH(fte, &s_fs_types, next) {
@@ -132,11 +141,29 @@ bool mgos_vfs_mkfs(const char *dev_type, const char *dev_opts,
 
 bool mgos_vfs_mount_dev(const char *path, struct mgos_vfs_dev *dev,
                         const char *fs_type, const char *fs_opts) {
-  const struct mgos_vfs_fs_type_entry *fte = find_fs_type(fs_type);
-  if (fte == NULL) return false;
-  if (path == NULL || path[0] != DIRSEP || fs_type == NULL) {
+  if (path == NULL || path[0] != DIRSEP) {
     return false;
   }
+  if (fs_type == NULL) {
+#ifdef MGOS_HAVE_VFS_FS_LFS
+    if (mgos_vfs_fs_lfs_probe(dev)) {
+      fs_type = MGOS_VFS_FS_TYPE_LFS;
+      if (fs_opts == NULL) fs_opts = CS_STRINGIFY_MACRO(MGOS_ROOT_FS_OPTS_LFS);
+    } else
+#endif
+#ifdef MGOS_HAVE_VFS_FS_SPIFFS
+    if (mgos_vfs_fs_spiffs_probe(dev)) {
+      fs_type = MGOS_VFS_FS_TYPE_SPIFFS;
+      if (fs_opts == NULL) fs_opts = CS_STRINGIFY_MACRO(MGOS_ROOT_FS_OPTS_SPIFFS);
+    } else
+#endif
+    {
+      LOG(LL_ERROR, ("FS type for %s could not be detected", dev->name));
+      return false;
+    }
+  }
+  const struct mgos_vfs_fs_type_entry *fte = find_fs_type(fs_type);
+  if (fte == NULL) return false;
   if (fs_opts == NULL) fs_opts = "";
   struct mgos_vfs_fs *fs = (struct mgos_vfs_fs *) calloc(1, sizeof(*fs));
   if (fs == NULL) return false;

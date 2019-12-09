@@ -199,6 +199,7 @@ bool mgos_vfs_mkfs_dev_name(const char *dev_name, const char *fs_type,
  * Nested mounts are not currently supported, so "/mnt/foo" is not ok.
  * Device and filesystem types must've been previosly registered and options
  * have device and filesystem-specific format and usually are JSON objects.
+ * If device type is NULL, device will be probed for known FS types.
  */
 bool mgos_vfs_mount(const char *path, const char *dev_type,
                     const char *dev_opts, const char *fs_type,
