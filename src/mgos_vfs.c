@@ -719,7 +719,16 @@ struct dirent *mgos_vfs_readdir(DIR *pdir) {
     goto out;
   }
   mgos_vfs_lock();
-  de = dir->me->fs->ops->readdir(dir->me->fs, dir->fs_dir);
+  while (true) {
+    de = dir->me->fs->ops->readdir(dir->me->fs, dir->fs_dir);
+    if (de != NULL) {
+      /* Currently we do not support multiple directory levels,
+       * hide special entries. */
+      if (strcmp(de->d_name, ".") == 0) continue;
+      if (strcmp(de->d_name, "..") == 0) continue;
+    }
+    break;
+  }
   mgos_vfs_unlock();
 out:
   return de;
