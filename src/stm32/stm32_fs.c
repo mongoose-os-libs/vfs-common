@@ -47,23 +47,32 @@ static bool stm32_fs_extract(void) {
   if (!zs) return false;
   int num_files = (int) mz_zip_reader_get_num_files(&zip);
   for (int i = 0; i < num_files; i++) {
+    size_t uncomp_size = 0;
     mz_zip_archive_file_stat zfst;
     if (!mz_zip_reader_file_stat(&zip, i, &zfst)) goto out;
     LOG(LL_INFO, ("%s, size: %d, csize: %d", zfst.m_filename,
                   (int) zfst.m_uncomp_size, (int) zfst.m_comp_size));
-    // We have plenty of heap at this point, keep it simple.
-    size_t uncomp_size = 0;
-    data = mz_zip_reader_extract_file_to_heap(&zip, zfst.m_filename,
-                                              &uncomp_size, 0);
-    if (data == NULL) goto out;
+    if (zfst.m_uncomp_size > 0) {
+      // We have plenty of heap at this point, keep it simple.
+      data = mz_zip_reader_extract_to_heap(&zip, zfst.m_file_index,
+                                           &uncomp_size, 0);
+      if (data == NULL) {
+        LOG(LL_ERROR, ("extract failed"));
+        goto out;
+      }
+    } else {
+      // A zero-size file.
+    }
     fp = fopen(zfst.m_filename, "w");
     if (fp == NULL) {
       LOG(LL_ERROR, ("open failed"));
       goto out;
     }
-    if (fwrite(data, uncomp_size, 1, fp) != 1) {
-      LOG(LL_ERROR, ("write failed"));
-      goto out;
+    if (uncomp_size > 0) {
+      if (fwrite(data, uncomp_size, 1, fp) != 1) {
+        LOG(LL_ERROR, ("write failed"));
+        goto out;
+      }
     }
     fclose(fp);
     fp = NULL;
