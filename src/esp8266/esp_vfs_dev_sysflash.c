@@ -47,7 +47,7 @@ static enum mgos_vfs_dev_err esp_spi_flash_readwrite_128(size_t addr,
   size_t aligned_size =
       ((size + (FLASH_UNIT_SIZE - 1)) & -FLASH_UNIT_SIZE) + FLASH_UNIT_SIZE;
 
-  int sres = spi_flash_read(aligned_addr, tmp_buf, aligned_size);
+  int sres = spi_flash_read(aligned_addr, (uint32 *) tmp_buf, aligned_size);
   if (sres != 0) {
     LOG(LL_ERROR, ("spi_flash_read failed: %d (%d, %d)", sres,
                    (int) aligned_addr, (int) aligned_size));
@@ -61,7 +61,7 @@ static enum mgos_vfs_dev_err esp_spi_flash_readwrite_128(size_t addr,
 
   memcpy(((uint8_t *) tmp_buf) + (addr - aligned_addr), data, size);
 
-  sres = spi_flash_write(aligned_addr, tmp_buf, aligned_size);
+  sres = spi_flash_write(aligned_addr, (uint32 *) tmp_buf, aligned_size);
   if (sres != 0) {
     LOG(LL_ERROR, ("spi_flash_write failed: %d (%d, %d)", sres,
                    (int) aligned_addr, (int) aligned_size));

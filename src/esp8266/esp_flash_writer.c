@@ -31,7 +31,7 @@ bool esp_init_flash_write_ctx(struct esp_flash_write_ctx *wctx, uint32_t addr,
                               uint32_t max_size) {
   if (addr % FLASH_SECTOR_SIZE != 0) {
     LOG(LL_ERROR,
-        ("Write address must be mod 0x%x, got 0x%x", FLASH_SECTOR_SIZE, addr));
+        ("Write address must be mod 0x%x, got 0x%lx", FLASH_SECTOR_SIZE, addr));
     return false;
   }
   memset(wctx, 0, sizeof(*wctx));
@@ -65,7 +65,7 @@ int esp_flash_write(struct esp_flash_write_ctx *wctx,
       uint32_t block_no = erase_addr / FLASH_BLOCK_SIZE;
       int ret = spi_flash_erase_block(block_no);
       LOG((ret == 0 ? LL_DEBUG : LL_ERROR),
-          ("Erase block %u (0x%x) -> %d", block_no, erase_addr, ret));
+          ("Erase block %lu (0x%lx) -> %d", block_no, erase_addr, ret));
       if (ret != 0) return -11;
       wctx->num_erased += FLASH_BLOCK_SIZE;
     } else
@@ -74,7 +74,7 @@ int esp_flash_write(struct esp_flash_write_ctx *wctx,
       uint32_t sec_no = erase_addr / FLASH_SECTOR_SIZE;
       int ret = spi_flash_erase_sector(sec_no);
       LOG((ret == 0 ? LL_DEBUG : LL_ERROR),
-          ("Erase sector %u (0x%x) -> %d", sec_no, erase_addr, ret));
+          ("Erase sector %lu (0x%lx) -> %d", sec_no, erase_addr, ret));
       if (ret != 0) return -12;
       wctx->num_erased += FLASH_SECTOR_SIZE;
     }
@@ -90,7 +90,7 @@ int esp_flash_write(struct esp_flash_write_ctx *wctx,
       uint32_t write_size = to_write - num_written;
       if (write_size > sizeof(tmp)) write_size = sizeof(tmp);
       memcpy(tmp, data.p + num_written, write_size);
-      ret = spi_flash_write(write_addr + num_written, tmp, write_size);
+      ret = spi_flash_write(write_addr + num_written, (uint32 *) tmp, write_size);
       if (ret != 0) break;
       num_written += write_size;
       mgos_wdt_feed();
@@ -99,7 +99,7 @@ int esp_flash_write(struct esp_flash_write_ctx *wctx,
     /* This is the last chunk, pad it to 4 bytes. */
     uint32_t tmp = 0xffffffff;
     memcpy(&tmp, data.p, data.len);
-    ret = spi_flash_write(write_addr, &tmp, 4);
+    ret = spi_flash_write(write_addr, (uint32 *) &tmp, 4);
     num_written = data.len;
   }
   if (ret == 0) {
@@ -110,6 +110,6 @@ int esp_flash_write(struct esp_flash_write_ctx *wctx,
   }
   LOG((ret > 0 ? (ret != (int) data.len ? LL_DEBUG : LL_VERBOSE_DEBUG)
                : LL_ERROR),
-      ("Write %u @ 0x%x -> %d", data.len, write_addr, ret));
+      ("Write %u @ 0x%lx -> %d", data.len, write_addr, ret));
   return ret;
 }
