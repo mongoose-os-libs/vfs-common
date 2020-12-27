@@ -58,7 +58,7 @@ const esp_partition_t *esp32_find_fs_for_app_slot(int slot) {
 }
 
 int esp32_get_boot_slot() {
-  const esp_partition_t *p = esp_ota_get_boot_partition();
+  const esp_partition_t *p = esp_ota_get_running_partition();
   if (p == NULL) return -1;
   return SUBTYPE_TO_SLOT(p->subtype);
 }
