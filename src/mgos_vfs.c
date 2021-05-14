@@ -1043,6 +1043,5 @@ bool mgos_vfs_gc(const char *path) {
   fs = me->fs;
   ret = fs->ops->gc(fs);
   mgos_vfs_unlock();
-  LOG(LL_INFO, ("%s %p %d", path, fs, ret));
   return ret;
 }
