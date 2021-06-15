@@ -46,8 +46,9 @@ static enum mgos_vfs_dev_err esp_spi_flash_readwrite_128(size_t addr,
   uint32_t aligned_addr = addr & (-FLASH_UNIT_SIZE);
   size_t aligned_size =
       ((size + (FLASH_UNIT_SIZE - 1)) & -FLASH_UNIT_SIZE) + FLASH_UNIT_SIZE;
-
+  mgos_ints_disable();
   int sres = spi_flash_read(aligned_addr, (uint32 *) tmp_buf, aligned_size);
+  mgos_ints_enable();
   if (sres != 0) {
     LOG(LL_ERROR, ("spi_flash_read failed: %d (%d, %d)", sres,
                    (int) aligned_addr, (int) aligned_size));
@@ -61,7 +62,9 @@ static enum mgos_vfs_dev_err esp_spi_flash_readwrite_128(size_t addr,
 
   memcpy(((uint8_t *) tmp_buf) + (addr - aligned_addr), data, size);
 
+  mgos_ints_disable();
   sres = spi_flash_write(aligned_addr, (uint32 *) tmp_buf, aligned_size);
+  mgos_ints_enable();
   if (sres != 0) {
     LOG(LL_ERROR, ("spi_flash_write failed: %d (%d, %d)", sres,
                    (int) aligned_addr, (int) aligned_size));
@@ -115,7 +118,10 @@ static enum mgos_vfs_dev_err esp_vfs_dev_sysflash_erase(
   }
   u32_t sector = (offset / FLASH_SECTOR_SIZE);
   while (sector * FLASH_SECTOR_SIZE < offset + len) {
-    if (spi_flash_erase_sector(sector) != SPI_FLASH_RESULT_OK) {
+    mgos_ints_disable();
+    int ret = spi_flash_erase_sector(sector);
+    mgos_ints_enable();
+    if (ret != SPI_FLASH_RESULT_OK) {
       res = MGOS_VFS_DEV_ERR_IO;
       goto out;
     }
