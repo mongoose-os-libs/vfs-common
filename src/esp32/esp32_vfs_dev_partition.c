@@ -61,11 +61,7 @@ static enum mgos_vfs_dev_err esp32_vfs_dev_partition_read(
   esp_err_t eres = ESP_OK;
   enum mgos_vfs_dev_err res = MGOS_VFS_DEV_ERR_INVAL;
   const esp_partition_t *p = (esp_partition_t *) dev->dev_data;
-  if (len > p->size || offset + len > p->address + p->size) {
-    LOG(LL_ERROR, ("%s: invalid read args: %u @ %u", p->label, len, offset));
-    goto out;
-  }
-  if ((eres = spi_flash_read(p->address + offset, dst, len)) != ESP_OK) {
+  if ((eres = esp_partition_read(p, offset, dst, len)) != ESP_OK) {
     res = MGOS_VFS_DEV_ERR_IO;
     goto out;
   }
@@ -81,11 +77,7 @@ static enum mgos_vfs_dev_err esp32_vfs_dev_partition_write(
   esp_err_t eres = ESP_OK;
   enum mgos_vfs_dev_err res = MGOS_VFS_DEV_ERR_INVAL;
   const esp_partition_t *p = (esp_partition_t *) dev->dev_data;
-  if (len > p->size || len + len > p->address + p->size) {
-    LOG(LL_ERROR, ("%s: invalid write args: %u @ %u", p->label, len, offset));
-    goto out;
-  }
-  if ((eres = spi_flash_write(p->address + offset, src, len)) != ESP_OK) {
+  if ((eres = esp_partition_write(p, offset, src, len)) != ESP_OK) {
     res = MGOS_VFS_DEV_ERR_IO;
     goto out;
   }
@@ -101,12 +93,7 @@ static enum mgos_vfs_dev_err esp32_vfs_dev_partition_erase(
   esp_err_t eres = ESP_OK;
   enum mgos_vfs_dev_err res = MGOS_VFS_DEV_ERR_INVAL;
   const esp_partition_t *p = (esp_partition_t *) dev->dev_data;
-  if (len > p->size || offset + len > p->address + p->size ||
-      offset % SPI_FLASH_SEC_SIZE != 0 || len % SPI_FLASH_SEC_SIZE != 0) {
-    LOG(LL_ERROR, ("Invalid erase args: %u @ %u", len, offset));
-    goto out;
-  }
-  if ((eres = spi_flash_erase_range(p->address + offset, len)) != ESP_OK) {
+  if ((eres = esp_partition_erase_range(p, offset, len)) != ESP_OK) {
     res = MGOS_VFS_DEV_ERR_IO;
     goto out;
   }
