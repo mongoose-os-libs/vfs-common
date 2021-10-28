@@ -80,7 +80,7 @@ bool esp32_fs_mount_part(const char *label, const char *path,
 
 static void esp32_register_partition_devs(void) {
   esp_partition_iterator_t pit = esp_partition_find(
-      ESP_PARTITION_TYPE_DATA, ESP_PARTITION_SUBTYPE_DATA_SPIFFS, NULL);
+      ESP_PARTITION_TYPE_DATA, ESP_PARTITION_SUBTYPE_ANY, NULL);
   while (pit != NULL) {
     const esp_partition_t *p = esp_partition_get(pit);
     char dev_opts[100];
