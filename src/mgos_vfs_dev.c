@@ -199,13 +199,16 @@ bool mgos_vfs_dev_close(struct mgos_vfs_dev *dev) {
   if (dev == NULL) goto out;
   dev_lock(dev);
   dev->refs--;
-  dev_unlock(dev);
   LOG(LL_DEBUG, ("%s refs %d", (dev->name ? dev->name : ""), dev->refs));
   if (dev->refs == 0) {
     ret = (dev->ops->close(dev) == MGOS_VFS_DEV_ERR_NONE);
+    dev_unlock(dev);
     mgos_rlock_destroy(dev->lock);
     memset(dev, 0, sizeof(*dev));
     free(dev);
+  } else {
+    ret = true;
+    dev_unlock(dev);
   }
 out:
   return ret;
@@ -215,17 +218,21 @@ bool mgos_vfs_dev_unregister(const char *name) {
   struct mgos_vfs_dev *dev = find_dev(name);
   if (dev == NULL) return false;
   dev_lock(dev);
-  dev->refs--;
+  bool alive = true;
+  dev->refs--; /* Drop the ref acquired by find_dev. */
   if (dev->name != NULL) {
-    /* This dev is still alive, just remove the name. */
     SLIST_REMOVE(&s_devs, dev, mgos_vfs_dev, next);
     char *name = dev->name;
-    bool f = (dev->refs > 1);
+    /* Drop the ref acquired by dev_register() and potentially destroy. */
+    alive = (dev->refs > 1);
     mgos_vfs_dev_close(dev);
-    if (f) dev->name = NULL;
+    if (alive) {
+      /* This dev is still alive, just remove the name. */
+      dev->name = NULL;
+    }
     free(name);
   }
-  dev_unlock(dev);
+  if (alive) dev_unlock(dev);
   return true;
 }
 
