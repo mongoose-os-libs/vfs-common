@@ -37,7 +37,6 @@
 #include "mgos_hal.h"
 #include "mgos_vfs.h"
 #include "mgos_vfs_dev.h"
-#include "mgos_vfs_fs_spiffs.h"
 #include "mgos_vfs_internal.h"
 
 #include "esp32xx_vfs_dev_partition.h"

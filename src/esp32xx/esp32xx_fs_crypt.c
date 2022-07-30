@@ -15,6 +15,8 @@
  * limitations under the License.
  */
 
+#ifdef MGOS_HAVE_VFS_FS_SPIFFS
+
 #include "spiffs.h"
 #include "spiffs_nucleus.h"
 
@@ -119,3 +121,5 @@ bool mgos_vfs_fs_spiffs_decrypt_block(spiffs_obj_id obj_id, uint32_t offset,
   }
   return true;
 }
+
+#endif // MGOS_HAVE_VFS_FS_SPIFFS
