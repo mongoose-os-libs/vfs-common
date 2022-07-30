@@ -15,8 +15,7 @@
  * limitations under the License.
  */
 
-#ifndef CS_FW_PLATFORMS_ESP32_SRC_ESP32_FS_H_
-#define CS_FW_PLATFORMS_ESP32_SRC_ESP32_FS_H_
+#pragma once
 
 #include <esp_vfs.h> /* for esp_vfs_translate_fd */
 #include <stdbool.h>
@@ -27,17 +26,17 @@
 extern "C" {
 #endif
 
-const esp_partition_t *esp32_find_fs_for_app_slot(int app_slot);
+const esp_partition_t *esp32xx_find_fs_for_app_slot(int app_slot);
 
-bool esp32_fs_crypt_init(void);
+bool esp32xx_fs_crypt_init(void);
 
-bool esp32_fs_mount_part(const char *label, const char *path,
+bool esp32xx_fs_mount_part(const char *label, const char *path,
                          const char *fs_type, const char *fs_opts);
 
 #define SUBTYPE_TO_SLOT(st) ((st) -ESP_PARTITION_SUBTYPE_OTA(0))
 #define NUM_OTA_SLOTS \
   (ESP_PARTITION_SUBTYPE_APP_OTA_MAX - ESP_PARTITION_SUBTYPE_APP_OTA_MIN)
-int esp32_get_boot_slot();
+int esp32xx_get_boot_slot();
 
 /*
  * Translate file descriptor returned by open() to the one suitable for use
@@ -48,5 +47,3 @@ int esp32_get_boot_slot();
 #ifdef __cplusplus
 }
 #endif
-
-#endif /* CS_FW_PLATFORMS_ESP32_SRC_ESP32_FS_H_ */

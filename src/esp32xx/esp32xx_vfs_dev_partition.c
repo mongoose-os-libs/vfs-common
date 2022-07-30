@@ -15,7 +15,7 @@
  * limitations under the License.
  */
 
-#include "esp32_vfs_dev_partition.h"
+#include "esp32xx_vfs_dev_partition.h"
 
 #include <errno.h>
 #include <stdbool.h>
@@ -32,7 +32,7 @@
 #include "mgos_vfs.h"
 #include "mgos_vfs_dev.h"
 
-static enum mgos_vfs_dev_err esp32_vfs_dev_partition_open(
+static enum mgos_vfs_dev_err esp32xx_vfs_dev_partition_open(
     struct mgos_vfs_dev *dev, const char *opts) {
   enum mgos_vfs_dev_err res = MGOS_VFS_DEV_ERR_INVAL;
   char *label = NULL;
@@ -56,7 +56,7 @@ out:
   return res;
 }
 
-static enum mgos_vfs_dev_err esp32_vfs_dev_partition_read(
+static enum mgos_vfs_dev_err esp32xx_vfs_dev_partition_read(
     struct mgos_vfs_dev *dev, size_t offset, size_t len, void *dst) {
   esp_err_t eres = ESP_OK;
   enum mgos_vfs_dev_err res = MGOS_VFS_DEV_ERR_INVAL;
@@ -72,7 +72,7 @@ out:
   return res;
 }
 
-static enum mgos_vfs_dev_err esp32_vfs_dev_partition_write(
+static enum mgos_vfs_dev_err esp32xx_vfs_dev_partition_write(
     struct mgos_vfs_dev *dev, size_t offset, size_t len, const void *src) {
   esp_err_t eres = ESP_OK;
   enum mgos_vfs_dev_err res = MGOS_VFS_DEV_ERR_INVAL;
@@ -88,7 +88,7 @@ out:
   return res;
 }
 
-static enum mgos_vfs_dev_err esp32_vfs_dev_partition_erase(
+static enum mgos_vfs_dev_err esp32xx_vfs_dev_partition_erase(
     struct mgos_vfs_dev *dev, size_t offset, size_t len) {
   esp_err_t eres = ESP_OK;
   enum mgos_vfs_dev_err res = MGOS_VFS_DEV_ERR_INVAL;
@@ -104,35 +104,35 @@ out:
   return res;
 }
 
-static size_t esp32_vfs_dev_partition_get_size(struct mgos_vfs_dev *dev) {
+static size_t esp32xx_vfs_dev_partition_get_size(struct mgos_vfs_dev *dev) {
   const esp_partition_t *p = (esp_partition_t *) dev->dev_data;
   return p->size;
 }
 
-static enum mgos_vfs_dev_err esp32_vfs_dev_partition_close(
+static enum mgos_vfs_dev_err esp32xx_vfs_dev_partition_close(
     struct mgos_vfs_dev *dev) {
   (void) dev;
   return MGOS_VFS_DEV_ERR_NONE;
 }
 
-static enum mgos_vfs_dev_err esp32_vfs_dev_partition_get_erase_sizes(
+static enum mgos_vfs_dev_err esp32xx_vfs_dev_partition_get_erase_sizes(
     struct mgos_vfs_dev *dev, size_t sizes[MGOS_VFS_DEV_NUM_ERASE_SIZES]) {
   sizes[0] = SPI_FLASH_SEC_SIZE;
   (void) dev;
   return MGOS_VFS_DEV_ERR_NONE;
 }
 
-static const struct mgos_vfs_dev_ops esp32_vfs_dev_partition_ops = {
-    .open = esp32_vfs_dev_partition_open,
-    .read = esp32_vfs_dev_partition_read,
-    .write = esp32_vfs_dev_partition_write,
-    .erase = esp32_vfs_dev_partition_erase,
-    .get_size = esp32_vfs_dev_partition_get_size,
-    .close = esp32_vfs_dev_partition_close,
-    .get_erase_sizes = esp32_vfs_dev_partition_get_erase_sizes,
+static const struct mgos_vfs_dev_ops esp32xx_vfs_dev_partition_ops = {
+    .open = esp32xx_vfs_dev_partition_open,
+    .read = esp32xx_vfs_dev_partition_read,
+    .write = esp32xx_vfs_dev_partition_write,
+    .erase = esp32xx_vfs_dev_partition_erase,
+    .get_size = esp32xx_vfs_dev_partition_get_size,
+    .close = esp32xx_vfs_dev_partition_close,
+    .get_erase_sizes = esp32xx_vfs_dev_partition_get_erase_sizes,
 };
 
-bool esp32_vfs_dev_partition_register_type(void) {
-  return mgos_vfs_dev_register_type(MGOS_VFS_DEV_TYPE_ESP32_PARTITION,
-                                    &esp32_vfs_dev_partition_ops);
+bool esp32xx_vfs_dev_partition_register_type(void) {
+  return mgos_vfs_dev_register_type(MGOS_VFS_DEV_TYPE_ESP32XX_PARTITION,
+                                    &esp32xx_vfs_dev_partition_ops);
 }

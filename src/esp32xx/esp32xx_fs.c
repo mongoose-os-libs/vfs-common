@@ -15,7 +15,7 @@
  * limitations under the License.
  */
 
-#include "esp32_fs.h"
+#include "esp32xx_fs.h"
 
 #include <errno.h>
 #include <stdbool.h>
@@ -40,9 +40,9 @@
 #include "mgos_vfs_fs_spiffs.h"
 #include "mgos_vfs_internal.h"
 
-#include "esp32_vfs_dev_partition.h"
+#include "esp32xx_vfs_dev_partition.h"
 
-const esp_partition_t *esp32_find_fs_for_app_slot(int slot) {
+const esp_partition_t *esp32xx_find_fs_for_app_slot(int slot) {
   char ota_fs_part_name[5] = {'f', 's', '_', 0, 0};
   const char *fs_part_name = NULL;
   /*
@@ -57,14 +57,14 @@ const esp_partition_t *esp32_find_fs_for_app_slot(int slot) {
       ESP_PARTITION_TYPE_DATA, ESP_PARTITION_SUBTYPE_DATA_SPIFFS, fs_part_name);
 }
 
-int esp32_get_boot_slot() {
+int esp32xx_get_boot_slot() {
   const esp_partition_t *p = esp_ota_get_running_partition();
   if (p == NULL) return -1;
   return SUBTYPE_TO_SLOT(p->subtype);
 }
 
-bool esp32_fs_mount_part(const char *label, const char *path,
-                         const char *fs_type, const char *fs_opts) {
+bool esp32xx_fs_mount_part(const char *label, const char *path,
+                           const char *fs_type, const char *fs_opts) {
   bool encrypt = false;
 #if CS_SPIFFS_ENABLE_ENCRYPTION
   encrypt = esp_flash_encryption_enabled();
@@ -78,7 +78,7 @@ bool esp32_fs_mount_part(const char *label, const char *path,
   return mgos_vfs_mount_dev_name(path, label, fs_type, fs_opts_c);
 }
 
-static void esp32_register_partition_devs(void) {
+static void esp32xx_register_partition_devs(void) {
   esp_partition_iterator_t pit = esp_partition_find(
       ESP_PARTITION_TYPE_DATA, ESP_PARTITION_SUBTYPE_ANY, NULL);
   while (pit != NULL) {
@@ -86,7 +86,7 @@ static void esp32_register_partition_devs(void) {
     char dev_opts[100];
     struct json_out out = JSON_OUT_BUF(dev_opts, sizeof(dev_opts));
     json_printf(&out, "{label: %Q}", p->label);
-    mgos_vfs_dev_create_and_register(MGOS_VFS_DEV_TYPE_ESP32_PARTITION,
+    mgos_vfs_dev_create_and_register(MGOS_VFS_DEV_TYPE_ESP32XX_PARTITION,
                                      dev_opts, p->label);
     pit = esp_partition_next(pit);
   }
@@ -94,20 +94,20 @@ static void esp32_register_partition_devs(void) {
 
 bool mgos_core_fs_init(void) {
 #if CS_SPIFFS_ENABLE_ENCRYPTION
-  if (esp_flash_encryption_enabled() && !esp32_fs_crypt_init()) {
+  if (esp_flash_encryption_enabled() && !esp32xx_fs_crypt_init()) {
     LOG(LL_ERROR, ("Failed to initialize FS encryption key"));
     return MGOS_INIT_FS_INIT_FAILED;
   }
 #endif
-  esp32_register_partition_devs();
+  esp32xx_register_partition_devs();
   const esp_partition_t *fs_part =
-      esp32_find_fs_for_app_slot(esp32_get_boot_slot());
+      esp32xx_find_fs_for_app_slot(esp32xx_get_boot_slot());
   if (fs_part == NULL) {
     LOG(LL_ERROR, ("No FS partition"));
     return false;
   }
-  return esp32_fs_mount_part(fs_part->label, "/", mgos_vfs_get_root_fs_type(),
-                             mgos_vfs_get_root_fs_opts());
+  return esp32xx_fs_mount_part(fs_part->label, "/", mgos_vfs_get_root_fs_type(),
+                               mgos_vfs_get_root_fs_opts());
 }
 
 bool mgos_vfs_common_init(void) {
@@ -133,5 +133,12 @@ bool mgos_vfs_common_init(void) {
     LOG(LL_ERROR, ("ESP VFS registration failed"));
     return false;
   }
-  return esp32_vfs_dev_partition_register_type();
+  return esp32xx_vfs_dev_partition_register_type();
 }
+
+// Temp, for OTA bin libs compatibility. TODO(rojer): Remove once not needed.
+const esp_partition_t *esp32_find_fs_for_app_slot(int slot)
+    __attribute__((alias("esp32xx_find_fs_for_app_slot")));
+bool esp32_fs_mount_part(const char *label, const char *path,
+                         const char *fs_type, const char *fs_opts)
+    __attribute__((alias("esp32xx_fs_mount_part")));

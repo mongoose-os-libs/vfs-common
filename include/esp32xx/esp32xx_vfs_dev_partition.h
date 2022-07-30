@@ -15,8 +15,7 @@
  * limitations under the License.
  */
 
-#ifndef CS_FW_PLATFORMS_ESP32_SRC_ESP32_VFS_DEV_PARTITION_H_
-#define CS_FW_PLATFORMS_ESP32_SRC_ESP32_VFS_DEV_PARTITION_H_
+#pragma once
 
 #include <stdbool.h>
 
@@ -24,12 +23,10 @@
 extern "C" {
 #endif
 
-#define MGOS_VFS_DEV_TYPE_ESP32_PARTITION "esp32part"
+#define MGOS_VFS_DEV_TYPE_ESP32XX_PARTITION "esp32part"
 
-bool esp32_vfs_dev_partition_register_type(void);
+bool esp32xx_vfs_dev_partition_register_type(void);
 
 #ifdef __cplusplus
 }
 #endif
-
-#endif /* CS_FW_PLATFORMS_ESP32_SRC_ESP32_VFS_DEV_PARTITION_H_ */

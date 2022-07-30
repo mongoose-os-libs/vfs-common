@@ -11,6 +11,20 @@ includes:
   - include
   - include/${platform}
 
+conds:
+  - when: mos.platform == "esp32"
+    apply:
+      sources:
+        - src/esp32xx
+      includes:
+        - include/esp32xx
+  - when: mos.platform == "esp32c3"
+    apply:
+      sources:
+        - src/esp32xx
+      includes:
+        - include/esp32xx
+
 no_implicit_init_deps: true
 init_deps: []
 

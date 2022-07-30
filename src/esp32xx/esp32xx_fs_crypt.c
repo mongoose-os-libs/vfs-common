@@ -15,8 +15,6 @@
  * limitations under the License.
  */
 
-#include "esp32_fs.h"
-
 #include "spiffs.h"
 #include "spiffs_nucleus.h"
 
@@ -26,6 +24,8 @@
 
 #include "common/cs_dbg.h"
 #include "mgos_hal.h"
+
+#include "esp32xx_fs.h"
 
 /*
  * ESP32 contains a hardware-accelerated flash encryption module. It uses a key
@@ -55,7 +55,7 @@
 
 mbedtls_aes_context s_aes_ctx_enc, s_aes_ctx_dec;
 
-bool esp32_fs_crypt_init(void) {
+bool esp32xx_fs_crypt_init(void) {
   uint8_t tmp[32];
   uint32_t addr = 0;
   for (addr = 0; addr < spi_flash_get_chip_size(); addr += 32) {
